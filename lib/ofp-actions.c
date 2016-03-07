@@ -35,6 +35,8 @@
 #include "util.h"
 #include "openvswitch/vlog.h"
 
+#include "increment_table_id.h"
+
 VLOG_DEFINE_THIS_MODULE(ofp_actions);
 
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -290,6 +292,9 @@ enum ofp_raw_action_type {
 
     /* NX1.0+(35): struct nx_action_conntrack, ... */
     NXAST_RAW_CT,
+
+    /* NX1.0+(100): struct nx_action_increment_table_id.  */
+    NXAST_RAW_INCREMENT_TABLE_ID,
 
 /* ## ------------------ ## */
 /* ## Debugging actions. ## */
@@ -5216,6 +5221,57 @@ format_GOTO_TABLE(const struct ofpact_goto_table *a, struct ds *s)
     ds_put_format(s, "goto_table:%"PRIu8, a->table_id);
 }
 
+struct nx_action_increment_table_id {
+    ovs_be16 type;
+    ovs_be16 len;
+    ovs_be32 vendor;
+    ovs_be16 subtype;
+    uint8_t counter_spec;
+    uint8_t pad[5];
+};
+OFP_ASSERT(sizeof(struct nx_action_increment_table_id) == 16);
+
+/* Converts 'learn' into a "struct nx_action_learn" and appends that action to
+ * 'ofpacts'. */
+/* Formerly increment_table_id_to_nxast */
+void
+encode_INCREMENT_TABLE_ID(const struct ofpact_increment_table_id *incr_table_id,
+			  enum ofp_version version OVS_UNUSED, struct ofpbuf *openflow)
+{
+    struct nx_action_increment_table_id *nic;
+
+    nic = put_NXAST_INCREMENT_TABLE_ID(openflow);
+    nic->counter_spec = incr_table_id->counter_spec;
+}
+
+/* Converts 'nic' into a "struct ofpact_increment_table_id" and appends that
+ * struct to 'ofpacts'.  Returns 0 if successful, otherwise an OFPERR_*. */
+enum ofperr
+decode_NXAST_RAW_INCREMENT_TABLE_ID(const struct nx_action_increment_table_id *nic,
+				    enum ofp_version version OVS_UNUSED, struct ofpbuf *ofpacts)
+{
+    struct ofpact_increment_table_id *incr_table_id;
+
+    incr_table_id = ofpact_put_INCREMENT_TABLE_ID(ofpacts);
+    incr_table_id->counter_spec = nic->counter_spec;
+
+    return 0;
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_INCREMENT_TABLE_ID(char *arg, struct ofpbuf *ofpacts,
+			 enum ofputil_protocol *usable_protocols OVS_UNUSED)
+{
+    return increment_table_id_parse(arg, ofpacts);
+}
+
+static void
+format_INCREMENT_TABLE_ID(const struct ofpact_increment_table_id *incr_table_id,
+			  struct ds *s)
+{
+    increment_table_id_format(incr_table_id, s);
+}
+
 static void
 log_bad_action(const struct ofp_action_header *actions, size_t actions_len,
                const struct ofp_action_header *bad_action, enum ofperr error)

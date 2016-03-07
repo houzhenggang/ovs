@@ -93,6 +93,7 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
 
     if(learn->learn_on_timeout) {
 	return;
+    }
 
     match_init_catchall(&fm->match);
     fm->priority = learn->priority;

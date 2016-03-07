@@ -95,6 +95,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/hmap.h \
 	lib/hmapx.c \
 	lib/hmapx.h \
+	lib/increment_table_id.c \
+	lib/increment_table_id.h \
 	lib/id-pool.c \
 	lib/id-pool.h \
 	lib/jhash.c \
@@ -220,6 +222,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/shash.h \
 	lib/simap.c \
 	lib/simap.h \
+	lib/simon.h \
 	lib/smap.c \
 	lib/smap.h \
 	lib/socket-util.c \

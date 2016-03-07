@@ -97,6 +97,7 @@
     OFPACT(RESUBMIT,        ofpact_resubmit,    ofpact, "resubmit")     \
     OFPACT(LEARN,           ofpact_learn,       specs, "learn")         \
     OFPACT(CONJUNCTION,     ofpact_conjunction, ofpact, "conjunction")  \
+    OFPACT(INCREMENT_TABLE_ID,ofpact_increment_table_id, ofpact, "increment_table_id") \
                                                                         \
     /* Arithmetic. */                                                   \
     OFPACT(MULTIPATH,       ofpact_multipath,   ofpact, "multipath")    \
@@ -797,6 +798,12 @@ struct ofpact_unroll_xlate {
     /* Metadata in xlate context, visible to controller via PACKET_INs. */
     uint8_t  rule_table_id;       /* 0xFF if none. */
     ovs_be64 rule_cookie;         /* OVS_BE64_MAX if none. */
+};
+
+/* OFPACT_INCREMENT_TABLE_ID */
+struct ofpact_increment_table_id {
+    struct ofpact ofpact;
+    uint8_t counter_spec;
 };
 
 /* Converting OpenFlow to ofpacts. */
