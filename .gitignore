@@ -68,3 +68,7 @@ odp-netlink.h
 OvsDpInterface.h
 /.vagrant/
 testsuite.tmp.orig
+
+GPATH
+GTAGS
+GRTAGS
