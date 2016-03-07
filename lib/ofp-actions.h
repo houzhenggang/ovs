@@ -625,6 +625,7 @@ struct ofpact_learn {
     enum nx_learn_flags flags;  /* NX_LEARN_F_*. */
     uint16_t fin_idle_timeout;  /* Idle timeout after FIN, if nonzero. */
     uint16_t fin_hard_timeout;  /* Hard timeout after FIN, if nonzero. */
+    uint8_t learn_on_timeout;
 
     unsigned int n_specs;
     struct ofpact_learn_spec specs[];

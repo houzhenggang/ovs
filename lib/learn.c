@@ -91,6 +91,9 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
 {
     const struct ofpact_learn_spec *spec;
 
+    if(learn->learn_on_timeout) {
+	return;
+
     match_init_catchall(&fm->match);
     fm->priority = learn->priority;
     fm->cookie = htonll(0);
@@ -359,6 +362,8 @@ learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
             learn->flags |= NX_LEARN_F_SEND_FLOW_REM;
         } else if (!strcmp(name, "delete_learned")) {
             learn->flags |= NX_LEARN_F_DELETE_LEARNED;
+	} else if (!strcmp(name, "learn_on_timeout")) {
+	    learn->learn_on_timeout = atoi(value);
         } else {
             struct ofpact_learn_spec *spec;
             char *error;
@@ -440,6 +445,10 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
     }
     if (learn->cookie != 0) {
         ds_put_format(s, ",cookie=%#"PRIx64, ntohll(learn->cookie));
+    }
+
+    if(learn->learn_on_timeout != 0) {
+	ds_put_cstr(s, "learn_on_timeout");
     }
 
     for (spec = learn->specs; spec < &learn->specs[learn->n_specs]; spec++) {

@@ -3909,7 +3909,8 @@ struct nx_action_learn {
     ovs_be64 cookie;            /* Cookie for new flow. */
     ovs_be16 flags;             /* NX_LEARN_F_*. */
     uint8_t table_id;           /* Table to insert flow entry. */
-    uint8_t pad;                /* Must be zero. */
+//    uint8_t pad;                /* Must be zero. */
+    uint8_t learn_on_timeout;
     ovs_be16 fin_idle_timeout;  /* Idle timeout after FIN, if nonzero. */
     ovs_be16 fin_hard_timeout;  /* Hard timeout after FIN, if nonzero. */
     /* Followed by a sequence of flow_mod_spec elements, as described above,
@@ -3968,6 +3969,7 @@ learn_min_len(uint16_t header)
 
 /* Converts 'nal' into a "struct ofpact_learn" and appends that struct to
  * 'ofpacts'.  Returns 0 if successful, otherwise an OFPERR_*. */
+// Formerly:  learn_from_openflow
 static enum ofperr
 decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
                        enum ofp_version ofp_version OVS_UNUSED,
@@ -3975,10 +3977,6 @@ decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
 {
     struct ofpact_learn *learn;
     const void *p, *end;
-
-    if (nal->pad) {
-        return OFPERR_OFPBAC_BAD_ARGUMENT;
-    }
 
     learn = ofpact_put_LEARN(ofpacts);
 
@@ -3989,6 +3987,7 @@ decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
     learn->table_id = nal->table_id;
     learn->fin_idle_timeout = ntohs(nal->fin_idle_timeout);
     learn->fin_hard_timeout = ntohs(nal->fin_hard_timeout);
+    learn->learn_on_timeout = nal->learn_on_timeout;
 
     learn->flags = ntohs(nal->flags);
     if (learn->flags & ~(NX_LEARN_F_SEND_FLOW_REM |
@@ -4083,6 +4082,7 @@ put_u32(struct ofpbuf *b, uint32_t x)
     put_be32(b, htonl(x));
 }
 
+// Formerly:  learn_to_nxast
 static void
 encode_LEARN(const struct ofpact_learn *learn,
              enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
@@ -4101,6 +4101,7 @@ encode_LEARN(const struct ofpact_learn *learn,
     nal->cookie = learn->cookie;
     nal->flags = htons(learn->flags);
     nal->table_id = learn->table_id;
+    nal->learn_on_timeout = learn->learn_on_timeout;
 
     for (spec = learn->specs; spec < &learn->specs[learn->n_specs]; spec++) {
         put_u16(out, spec->n_bits | spec->dst_type | spec->src_type);
