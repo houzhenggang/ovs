@@ -72,3 +72,4 @@ testsuite.tmp.orig
 GPATH
 GTAGS
 GRTAGS
+.generated_files
