@@ -36,6 +36,7 @@
 #include "openvswitch/vlog.h"
 
 #include "increment_table_id.h"
+#include "learn_learn.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_actions);
 
@@ -295,6 +296,9 @@ enum ofp_raw_action_type {
 
     /* NX1.0+(100): struct nx_action_increment_table_id.  */
     NXAST_RAW_INCREMENT_TABLE_ID,
+
+    /* NX1.0+(101): struct nx_action_learn_learn. */
+    NXAST_RAW_LEARN_LEARN,
 
 /* ## ------------------ ## */
 /* ## Debugging actions. ## */
@@ -5295,6 +5299,319 @@ format_INCREMENT_TABLE_ID(const struct ofpact_increment_table_id *incr_table_id,
 {
     increment_table_id_format(incr_table_id, s);
 }
+
+/* NXAST_RAW_LEARN_LEARN */
+struct nx_action_learn_learn {
+    ovs_be16 type;              /* OFPAT_VENDOR. */
+    ovs_be16 len;               /* At least 24. */
+    ovs_be32 vendor;            /* NX_VENDOR_ID. */
+    ovs_be16 subtype;           /* NXAST_LEARN_LEARN. */
+    ovs_be16 idle_timeout;      /* Idle time before discarding (seconds). */
+    ovs_be16 hard_timeout;      /* Max time before discarding (seconds). */
+    ovs_be16 priority;          /* Priority level of flow entry. */
+    ovs_be64 cookie;            /* Cookie for new flow. */
+    ovs_be16 flags;             /* Either 0 or OFPFF_SEND_FLOW_REM. */
+    uint8_t table_id;           /* Table to insert flow entry. */
+    uint8_t learn_on_timeout;
+    ovs_be16 fin_idle_timeout;  /* Idle timeout after FIN, if nonzero. */
+    ovs_be16 fin_hard_timeout;  /* Hard timeout after FIN, if nonzero. */
+    ovs_be32 n_specs;
+    ovs_be32 ofpacts_len;
+    ovs_be32 spec_len;
+    uint8_t rear_padding;       /* Number of bytes padded to rear */
+    uint8_t table_spec;
+    uint8_t pad[2];
+    /* Followed by a sequence of flow_mod_spec elements,
+     * then followed by action data */
+};
+OFP_ASSERT(sizeof(struct nx_action_learn_learn) == 48);
+
+/* Converts 'learn' into a "struct nx_action_learn_learn" and appends that action to
+ * 'ofpacts'.
+ * Formerly learn_learn_to_nxast.
+ */
+void
+encode_LEARN_LEARN(const struct ofpact_learn_learn *learn,
+		   enum ofp_version version, struct ofpbuf *openflow)
+{
+    const struct ofpact_learn_spec *spec;
+    const struct ofpact_learn_spec *end;
+    struct nx_action_learn_learn *nal;
+    size_t start_ofs;
+    unsigned int len;
+    unsigned int n_specs;
+    unsigned int ofpact_len;
+    const struct ofpact *learn_actions;
+
+    n_specs = 0;
+    ofpact_len = 0;
+
+    start_ofs = openflow->size;
+    nal = put_NXAST_LEARN_LEARN(openflow);
+    nal->idle_timeout = htons(learn->idle_timeout);
+    nal->hard_timeout = htons(learn->hard_timeout);
+    nal->fin_idle_timeout = htons(learn->fin_idle_timeout);
+    nal->fin_hard_timeout = htons(learn->fin_hard_timeout);
+    nal->priority = htons(learn->priority);
+    nal->cookie = htonll(learn->cookie);
+    nal->flags = htons(learn->flags);
+    nal->table_id = learn->table_id;
+    nal->learn_on_timeout = learn->learn_on_timeout;
+    nal->table_spec = learn->table_spec;
+
+    spec = (const struct ofpact_learn_spec *) learn->data;
+    end = &spec[learn->n_specs];
+
+    len = openflow->size;
+
+    for (spec = (const struct ofpact_learn_spec *) learn->data;
+	    spec < end; spec++) {
+	put_u16(openflow, spec->n_bits | spec->dst_type | spec->src_type);
+
+	if (spec->src_type == NX_LEARN_SRC_FIELD) {
+	    put_u32(openflow, mf_nxm_header(spec->src.field->id));
+//	    put_u32(openflow, spec->src.field->nxm_header);
+	    put_u16(openflow, spec->src.ofs);
+	} else {
+	    size_t n_dst_bytes = 2 * DIV_ROUND_UP(spec->n_bits, 16);
+	    uint8_t *bits = ofpbuf_put_zeros(openflow, n_dst_bytes);
+
+	    bitwise_copy(&spec->src_imm, sizeof spec->src_imm, 0,
+		    bits, n_dst_bytes, 0,
+		    spec->n_bits);
+	}
+
+	if (spec->dst_type == NX_LEARN_DST_MATCH ||
+	    spec->dst_type == NX_LEARN_DST_LOAD) {
+	    put_u32(openflow, mf_nxm_header(spec->dst.field->id));
+//	    put_u32(openflow, spec->dst.field->nxm_header);
+	    put_u16(openflow, spec->dst.ofs);
+	}
+
+	// Add the defer count
+	ofpbuf_put(openflow, &spec->defer_count, sizeof spec->defer_count);
+
+	n_specs++;
+    }
+
+    // Add actions.
+    nal->spec_len = htonl(openflow->size - len);
+    len = openflow->size;
+
+    learn_actions = (const struct ofpact *) end;
+    ofpacts_put_openflow_actions(learn_actions, learn->ofpacts_len, openflow, version);
+    ofpact_len = openflow->size - len;
+
+    if ((openflow->size - start_ofs) % 8) {
+	nal->rear_padding = 8 - (openflow->size - start_ofs) % 8;
+	ofpbuf_put_zeros(openflow, 8 - (openflow->size - start_ofs) % 8);
+    }
+
+    nal->n_specs = htonl(n_specs);
+    nal->ofpacts_len = htonl(ofpact_len);
+
+    nal = ofpbuf_at_assert(openflow, start_ofs, sizeof *nal);
+    nal->len = htons(openflow->size - start_ofs);
+    nal->ofpacts_len = htonl(ofpact_len);
+}
+
+
+/* Converts 'nal' into a "struct ofpact_learn_learn" and appends that struct to
+ * 'ofpacts'.  Returns 0 if successful, otherwise an OFPERR_*.
+ * Formerly learn_learn_from_openflow.
+ */
+enum ofperr
+decode_NXAST_RAW_LEARN_LEARN(const struct nx_action_learn_learn *nal,
+			     enum ofp_version version OVS_UNUSED, struct ofpbuf *ofpacts)
+{
+    struct ofpact_learn_learn *learn;
+    const void *p, *end, *spec_end;
+
+    struct ofpbuf learn_ofpacts;
+    struct ofpbuf converted_learn_ofpacts;
+    unsigned int ofpacts_len;
+
+    learn = ofpact_put_LEARN_LEARN(ofpacts);
+
+    learn->idle_timeout = ntohs(nal->idle_timeout);
+    learn->hard_timeout = ntohs(nal->hard_timeout);
+    learn->priority = ntohs(nal->priority);
+    learn->cookie = ntohll(nal->cookie);
+    learn->table_id = nal->table_id;
+    learn->fin_idle_timeout = ntohs(nal->fin_idle_timeout);
+    learn->fin_hard_timeout = ntohs(nal->fin_hard_timeout);
+    learn->learn_on_timeout = nal->learn_on_timeout;
+    learn->table_spec = nal->table_spec;
+
+    /* We only support "send-flow-removed" for now. */
+    switch (ntohs(nal->flags)) {
+    case 0:
+	learn->flags = 0;
+	break;
+    case OFPFF_SEND_FLOW_REM:
+	learn->flags = OFPUTIL_FF_SEND_FLOW_REM;
+	break;
+    default:
+	return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
+    if (learn->table_id == 0xff) {
+	return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
+    p = nal + 1;
+    end = (char *) nal + ntohs(nal->len);
+    spec_end = (char *) end - ntohl(nal->ofpacts_len) - nal->rear_padding;
+    spec_end = (char *) p + ntohl(nal->spec_len);
+    //spec_end = (char *) (nal + 1) + ntohl(nal->n_specs)*sizeof(struct ofpact_learn_spec);
+
+    for (p = nal + 1; p != spec_end; ) {
+	uint8_t deferal_count;
+	struct ofpact_learn_spec *spec;
+	uint16_t header = ntohs(get_be16(&p));
+
+	if ((char *) spec_end - (char *) p == 0) {
+	    break;
+	}
+
+	if (!header) {
+	    break;
+	}
+
+	/* Check that the arguments don't overrun the end of the action. */
+	if ((char *) spec_end - (char *) p <= 0) {
+	    break;
+	}
+
+	spec = ofpbuf_put_zeros(ofpacts, sizeof *spec);
+	learn = ofpacts->header;
+	learn->n_specs++;
+
+	spec->src_type = header & NX_LEARN_SRC_MASK;
+	spec->dst_type = header & NX_LEARN_DST_MASK;
+	spec->n_bits = header & NX_LEARN_N_BITS_MASK;
+
+	/* Check for valid src and dst type combination. */
+	if (spec->dst_type == NX_LEARN_DST_MATCH ||
+	    spec->dst_type == NX_LEARN_DST_LOAD ||
+	    spec->dst_type == NX_LEARN_DST_RESERVED ||
+	    (spec->dst_type == NX_LEARN_DST_OUTPUT &&
+	     spec->src_type == NX_LEARN_SRC_FIELD)) {
+	    /* OK. */
+	} else {
+	    return OFPERR_OFPBAC_BAD_ARGUMENT;
+	}
+
+	if ((char *) spec_end - (char *) p < learn_min_len(header)) {
+	    //fprintf(stderr, "learn_learn_from_openflow BAD LEN\n");
+	    //fprintf(stderr, " p=%p nal+1=%p end=%p spec_end=%p learn_min_len(header)=%u\n",
+	    //        p, nal + 1, end, spec_end, learn_min_len(header));
+	    //fprintf(stderr, "difference=%u\n", (char *) spec_end - (char *) p);
+	    return OFPERR_OFPBAC_BAD_LEN;
+	}
+
+	/* Get the source. */
+	if (spec->src_type == NX_LEARN_SRC_FIELD) {
+	    get_subfield(spec->n_bits, &p, &spec->src);
+	} else {
+	    int p_bytes = 2 * DIV_ROUND_UP(spec->n_bits, 16);
+
+	    bitwise_copy(p, p_bytes, 0,
+			 &spec->src_imm, sizeof spec->src_imm, 0,
+			 spec->n_bits);
+	    p = (const uint8_t *) p + p_bytes;
+	}
+
+	/* Get the destination. */
+	if (spec->dst_type == NX_LEARN_DST_MATCH ||
+	    spec->dst_type == NX_LEARN_DST_LOAD) {
+	    get_subfield(spec->n_bits, &p, &spec->dst);
+	}
+
+	// Populate deferral count
+	deferal_count = get_u8(&p);
+	spec->defer_count = deferal_count;
+    }
+
+
+    // TODO Add actions
+    // Compute the ofpacts_len
+    ofpacts_len = ntohl(nal->ofpacts_len);
+
+    // Create buffers
+    ofpbuf_init(&learn_ofpacts, 1024);
+    ofpbuf_init(&converted_learn_ofpacts, 1024);
+
+    // But data in learn_ofpacts
+    //ofpbuf_put_zeros(ofpacts, ofpacts_len);
+    ofpbuf_put(&learn_ofpacts, spec_end, ofpacts_len);
+
+    learn = ofpacts->header;
+    //ofpbuf_put(&learn_ofpacts, spec_end, ofpacts_len);
+    // *** TODO ***
+    // ofpacts_pull_openflow10(&learn_ofpacts, ofpacts_len, &converted_learn_ofpacts);
+    ofpacts_pull_openflow_actions(&learn_ofpacts, ofpacts_len, version, &converted_learn_ofpacts);
+    learn->ofpacts_len = converted_learn_ofpacts.size;
+
+    //fprintf(stderr, "converted_learn_ofpacts.size=%u learn_ofpacts.size=%u learn->ofpacts_len=%u learn->n_specs=%u\n",
+	  //  converted_learn_ofpacts.size, learn_ofpacts.size, learn->ofpacts_len, learn->n_specs);
+
+    // Add the data to ofpacts
+    ofpbuf_put(ofpacts, converted_learn_ofpacts.data, converted_learn_ofpacts.size);
+    //ofpact_update_len(ofpacts, &learn->ofpact);
+
+    // Clear the buffers
+    ofpbuf_uninit(&learn_ofpacts);
+    ofpbuf_uninit(&converted_learn_ofpacts);
+
+    //learn->data = learn + 1;
+    //learn->data = (char *) learn + offsetof(struct ofpact_learn_learn, data);
+    learn = ofpacts->header;
+    ofpact_update_len(ofpacts, &learn->ofpact);
+
+    // TODO Ensure this change was okay, there will be data
+    // between the p and end because of the action data.
+    if ((char *) spec_end - (char *) p <= 0) {
+	return 0;
+    }
+    //if (!is_all_zeros(p, (char *) spec_end - (char *) p)) {
+    //    return OFPERR_OFPBAC_BAD_ARGUMENT;
+    //}
+
+    if (learn->ofpacts_len == 0 && nal->ofpacts_len > 0) {
+	//fprintf(stderr, "******************* learn_learn_from_openflow loses actions ****\n");
+    }
+
+    return 0;
+}
+
+/* Parses 'arg' as a set of arguments to the "learn_learn" action and appends a
+ * matching OFPACT_LEARN_LEARN action to 'ofpacts'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string.
+ *
+ * If 'flow' is nonnull, then it should be the flow from a struct match that is
+ * the matching rule for the learning action.  This helps to better validate
+ * the action's arguments.
+ *
+ * Modifies 'arg'. */
+
+char * OVS_WARN_UNUSED_RESULT
+parse_LEARN_LEARN(char *arg, struct ofpbuf *ofpacts,
+		  enum ofputil_protocol *usable_protocols)
+{
+    return learn_learn_parse(arg, ofpacts, usable_protocols);
+}
+
+/* Appends a description of 'learn' to 's', in the format that ovs-ofctl(8)
+ * describes. */
+void
+format_LEARN_LEARN(const struct ofpact_learn_learn *learn, struct ds *s)
+{
+    learn_learn_format(learn, s);
+}
+
 
 static void
 log_bad_action(const struct ofp_action_header *actions, size_t actions_len,

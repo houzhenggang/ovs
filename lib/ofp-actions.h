@@ -98,6 +98,7 @@
     OFPACT(LEARN,           ofpact_learn,       specs, "learn")         \
     OFPACT(CONJUNCTION,     ofpact_conjunction, ofpact, "conjunction")  \
     OFPACT(INCREMENT_TABLE_ID,ofpact_increment_table_id, ofpact, "increment_table_id") \
+    OFPACT(LEARN_LEARN, ofpact_learn_learn, data, "learn_learn")        \
                                                                         \
     /* Arithmetic. */                                                   \
     OFPACT(MULTIPATH,       ofpact_multipath,   ofpact, "multipath")    \
@@ -807,6 +808,30 @@ struct ofpact_increment_table_id {
     struct ofpact ofpact;
     uint8_t counter_spec;
 };
+
+/* OFPACT_LEARN_LEARN.
+ *
+ * Used for NXAST_RAW_LEARN_LEARN. */
+struct ofpact_learn_learn {
+    struct ofpact ofpact;
+
+    uint16_t idle_timeout;      /* Idle time before discarding (seconds). */
+    uint16_t hard_timeout;      /* Max time before discarding (seconds). */
+    uint16_t priority;          /* Priority level of flow entry. */
+    uint64_t cookie;            /* Cookie for new flow. */
+    enum ofputil_flow_mod_flags flags;
+    uint8_t table_id;           /* Table to insert flow entry. */
+    uint16_t fin_idle_timeout;  /* Idle timeout after FIN, if nonzero. */
+    uint16_t fin_hard_timeout;  /* Hard timeout after FIN, if nonzero. */
+    uint8_t learn_on_timeout;
+    uint8_t table_spec;
+
+    uint32_t n_specs;
+    uint32_t ofpacts_len;
+
+    uint8_t data[];  // Contains the specs data, follows by actions
+};
+
 
 /* Converting OpenFlow to ofpacts. */
 enum ofperr ofpacts_pull_openflow_actions(struct ofpbuf *openflow,
