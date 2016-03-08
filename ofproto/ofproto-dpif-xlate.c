@@ -60,6 +60,8 @@
 #include "tunnel.h"
 #include "openvswitch/vlog.h"
 
+#include "increment_table_id.h"
+
 COVERAGE_DEFINE(xlate_actions);
 COVERAGE_DEFINE(xlate_actions_oversize);
 COVERAGE_DEFINE(xlate_actions_too_many_output);
@@ -4002,6 +4004,40 @@ xlate_learn_action(struct xlate_ctx *ctx, const struct ofpact_learn *learn)
 }
 
 static void
+xlate_increment_table_id_action(struct xlate_ctx *ctx,
+				const struct ofpact_increment_table_id *incr_table_id) {
+
+    uint8_t table_val = get_table_counter_by_spec(incr_table_id->counter_spec);
+
+    /*
+     * Indicate that this action requires per-packet processing so its result cannot
+     * be cached.  Adding has_learn doesn't seem to be enough here, so instead, set a
+     * "slow path reason" for this packet.  The CONTROLLER slow path reason is the only one
+     * that doesn't incur any additional operations (like for bundle or STP).
+     * TODO:  Determine if this is the least impactful way to handle this situation; if so
+     * add another slow path reason.
+     */
+    //ctx->xout->has_learn = true;
+    ctx->xout->slow = SLOW_CONTROLLER;
+
+#if 0 // TODO:  Add may_increment to xlate_ctx
+    /* Don't increment if we're not processing a packet. */
+    if(!ctx->xin->may_increment) {
+	return;
+    }
+#endif
+
+    VLOG_DBG("Executing increment_table_id, table_id:  %"PRIu8", spec:  %s, val:  %2"PRIu8", nw_src:  0x%"PRIx32", recurse: %"PRIu32,
+	     ctx->table_id,
+	     (incr_table_id->counter_spec == TABLE_SPEC_INGRESS) ? "INGRESS" : "EGRESS",
+	     table_val,
+	     ctx->xin->flow.nw_src,
+	     ctx->recurse);
+    increment_table_id_execute(incr_table_id);
+}
+
+
+static void
 xlate_fin_timeout__(struct rule_dpif *rule, uint16_t tcp_flags,
                     uint16_t idle_timeout, uint16_t hard_timeout)
 {
@@ -4191,6 +4227,7 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_STACK_PUSH:
         case OFPACT_STACK_POP:
         case OFPACT_LEARN:
+	case OFPACT_INCREMENT_TABLE_ID:
         case OFPACT_WRITE_METADATA:
         case OFPACT_GOTO_TABLE:
         case OFPACT_ENQUEUE:
@@ -4666,6 +4703,11 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_LEARN:
             CHECK_MPLS_RECIRCULATION();
             xlate_learn_action(ctx, ofpact_get_LEARN(a));
+            break;
+
+        case OFPACT_INCREMENT_TABLE_ID:
+            CHECK_MPLS_RECIRCULATION();
+	    xlate_increment_table_id_action(ctx, ofpact_get_INCREMENT_TABLE_ID(a));
             break;
 
         case OFPACT_CONJUNCTION: {
