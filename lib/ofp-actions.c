@@ -413,6 +413,7 @@ ofpact_next_flattened(const struct ofpact *ofpact)
     case OFPACT_LEARN:
     case OFPACT_CONJUNCTION:
     case OFPACT_INCREMENT_TABLE_ID:
+    case OFPACT_LEARN_LEARN:
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
     case OFPACT_EXIT:
@@ -5773,6 +5774,7 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
     case OFPACT_LEARN:
     case OFPACT_CONJUNCTION:
     case OFPACT_INCREMENT_TABLE_ID:
+    case OFPACT_LEARN_LEARN:
     case OFPACT_METER:
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
@@ -5844,6 +5846,7 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
     case OFPACT_LEARN:
     case OFPACT_CONJUNCTION:
     case OFPACT_INCREMENT_TABLE_ID:
+    case OFPACT_LEARN_LEARN:
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
     case OFPACT_OUTPUT_REG:
@@ -6062,6 +6065,7 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
     case OFPACT_LEARN:
     case OFPACT_CONJUNCTION:
     case OFPACT_INCREMENT_TABLE_ID:
+    case OFPACT_LEARN_LEARN:
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
     case OFPACT_EXIT:
@@ -6604,6 +6608,10 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
 
     case OFPACT_INCREMENT_TABLE_ID:
         return increment_table_id_check(ofpact_get_INCREMENT_TABLE_ID(a));
+
+    case OFPACT_LEARN_LEARN:
+	return learn_learn_check(ofpact_get_LEARN_LEARN(a), flow,
+				 max_ports, table_id, n_tables, usable_protocols);
 
     case OFPACT_MULTIPATH:
         return multipath_check(ofpact_get_MULTIPATH(a), flow);
@@ -7155,6 +7163,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_LEARN:
     case OFPACT_CONJUNCTION:
     case OFPACT_INCREMENT_TABLE_ID:
+    case OFPACT_LEARN_LEARN:
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
     case OFPACT_EXIT:

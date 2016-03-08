@@ -44,7 +44,8 @@ enum ofperr learn_learn_check(const struct ofpact_learn_learn * learn,
 void learn_learn_execute(const struct ofpact_learn_learn *learn, const struct flow *flow,
                          struct ofputil_flow_mod *fm, struct ofpbuf *ofpacts, uint8_t rule_table);
 
-void learn_learn_mask(const struct ofpact_learn_learn *, struct flow_wildcards *);
+void learn_learn_mask(const struct ofpact_learn_learn *learn,
+		      struct flow_wildcards *wc);
 
 char *learn_learn_parse(char *arg, struct ofpbuf *ofpacts,
 			enum ofputil_protocol *usable_protocols) OVS_WARN_UNUSED_RESULT;

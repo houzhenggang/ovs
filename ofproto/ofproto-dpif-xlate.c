@@ -61,6 +61,7 @@
 #include "openvswitch/vlog.h"
 
 #include "increment_table_id.h"
+#include "learn_learn.h"
 
 COVERAGE_DEFINE(xlate_actions);
 COVERAGE_DEFINE(xlate_actions_oversize);
@@ -4036,6 +4037,30 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
     increment_table_id_execute(incr_table_id);
 }
 
+static void
+xlate_learn_learn_action(struct xlate_ctx *ctx,
+                         const struct ofpact_learn_learn *learn,
+                         struct rule_dpif *rule OVS_UNUSED)
+{
+    uint64_t ofpacts_stub[1024 / 8];
+    struct ofputil_flow_mod fm;
+    struct ofpbuf ofpacts;
+
+    //ctx->xout->has_learn = true;
+    ctx->xout->slow = SLOW_ACTION;
+    learn_learn_mask(learn, ctx->wc);
+
+    if (!ctx->xin->may_learn) {
+        return;
+    }
+
+    ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
+    learn_learn_execute(learn, &ctx->xin->flow, &fm, &ofpacts,
+        ctx->table_id);
+    ofproto_dpif_flow_mod(ctx->xbridge->ofproto, &fm);
+    ofpbuf_uninit(&ofpacts);
+}
+
 
 static void
 xlate_fin_timeout__(struct rule_dpif *rule, uint16_t tcp_flags,
@@ -4228,6 +4253,7 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_STACK_POP:
         case OFPACT_LEARN:
 	case OFPACT_INCREMENT_TABLE_ID:
+	case OFPACT_LEARN_LEARN:
         case OFPACT_WRITE_METADATA:
         case OFPACT_GOTO_TABLE:
         case OFPACT_ENQUEUE:
@@ -4709,6 +4735,11 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             CHECK_MPLS_RECIRCULATION();
 	    xlate_increment_table_id_action(ctx, ofpact_get_INCREMENT_TABLE_ID(a));
             break;
+
+	case OFPACT_LEARN_LEARN:
+	    CHECK_MPLS_RECIRCULATION();
+	    xlate_learn_learn_action(ctx, ofpact_get_LEARN_LEARN(a), ctx->xin->rule);
+	    break;
 
         case OFPACT_CONJUNCTION: {
             /* A flow with a "conjunction" action represents part of a special
