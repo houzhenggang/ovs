@@ -3924,6 +3924,14 @@ struct nx_action_learn {
 };
 OFP_ASSERT(sizeof(struct nx_action_learn) == 32);
 
+static uint8_t
+get_u8(const void **pp) {
+    const uint8_t *p = *pp;
+    uint8_t value = *p;
+    *pp = p + 1;
+    return value;
+}
+
 static ovs_be16
 get_be16(const void **pp)
 {
@@ -4007,12 +4015,17 @@ decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
 
     end = (char *) nal + ntohs(nal->len);
     for (p = nal + 1; p != end; ) {
+	if(((char *)end - (char *)p) == 0) {
+	    break;
+	}
         struct ofpact_learn_spec *spec;
         uint16_t header = ntohs(get_be16(&p));
 
         if (!header) {
             break;
-        }
+        } else if(((char *)end - (char*)p) <= 0) {
+	    break;
+	}
 
         spec = ofpbuf_put_zeros(ofpacts, sizeof *spec);
         learn = ofpacts->header;
@@ -4054,8 +4067,14 @@ decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
             spec->dst_type == NX_LEARN_DST_LOAD) {
             get_subfield(spec->n_bits, &p, &spec->dst);
         }
+
+	uint8_t deferal_count OVS_UNUSED = get_u8(&p);
     }
     ofpact_update_len(ofpacts, &learn->ofpact);
+
+    if(((char *)end - (char *)p) <= 0) {
+	return 0;
+    }
 
     if (!is_all_zeros(p, (char *) end - (char *) p)) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
@@ -4128,6 +4147,10 @@ encode_LEARN(const struct ofpact_learn *learn,
             put_u32(out, mf_nxm_header(spec->dst.field->id));
             put_u16(out, spec->dst.ofs);
         }
+
+	/* Add the defer count. */
+	ofpbuf_put(out, &spec->defer_count, sizeof spec->defer_count);
+
     }
 
     pad_ofpat(out, start_ofs);

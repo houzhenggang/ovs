@@ -565,6 +565,8 @@ struct ofpact_learn_spec {
 
     int dst_type;             /* One of NX_LEARN_DST_*. */
     struct mf_subfield dst;   /* NX_LEARN_DST_MATCH, NX_LEARN_DST_LOAD only. */
+
+    uint8_t defer_count;        /* Deferred substitution counter. */
 };
 
 
