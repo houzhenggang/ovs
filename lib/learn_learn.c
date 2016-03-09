@@ -85,7 +85,6 @@ change_spec_values(struct ofpact_learn_spec *start,
 
 	    dst = spec->src.field;
 	    mf_get_value(dst, flow, &imm);
-	    //dst = mf_read_subfield(&spec->src, flow, &imm);
 
 	    // Memset & memcpy value into spec->src_imm
 	    memset(&spec->src_imm, 0, sizeof spec->src_imm);
@@ -119,24 +118,24 @@ populate_deferral_values(struct ofpact_learn_learn *learn,
      do_deferral(learn_actions, learn->ofpacts_len, flow);
  }
 
- void do_deferral(struct ofpact *ofpacts, uint32_t ofpacts_len,
-		  const struct flow *flow) {
+void do_deferral(struct ofpact *ofpacts, uint32_t ofpacts_len,
+		 const struct flow *flow) {
     struct ofpact *a;
 
     OFPACT_FOR_EACH(a, ofpacts, ofpacts_len) {
 	if (a->type == OFPACT_LEARN_LEARN) {
 	    populate_deferral_values(ofpact_get_LEARN_LEARN(a), flow);
 	}
- #if 0
+#if 0
 	else if (a->type == OFPACT_LEARN_DELETE) {
 	    struct ofpact_learn_delete *del;
 
 	    del = ofpact_get_LEARN_DELETE(a);
 	    change_spec_values(del->specs, &del->specs[del->n_specs], flow);
 	}
- #endif
+#endif
     }
- }
+}
 
 
 /* Checks that 'learn' is a valid action on 'flow'.  Returns 0 if it is valid,
@@ -222,7 +221,6 @@ learn_learn_execute(const struct ofpact_learn_learn *learn,
 {
     const struct ofpact_learn_spec *spec;
     const struct ofpact_learn_spec *end;
-    //    struct ofpact_resubmit *resubmit;
 
     spec = (const struct ofpact_learn_spec *) learn->data;
     end = &spec[learn->n_specs];
@@ -537,7 +535,6 @@ learn_learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts,
     struct ofpact_learn_learn *learn;
     struct match match;
     char *name, *value;
-    //char *ptr;
     char *error;
     char *act_str;
     char *end_act_str;
@@ -568,7 +565,6 @@ learn_learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts,
     ofpbuf_init(&learn_ofpacts_buf, 32);
 
     learn = ofpact_put_LEARN_LEARN(ofpacts);
-    //ptr = (char *) learn;
 
     learn->idle_timeout = OFP_FLOW_PERMANENT;
     learn->hard_timeout = OFP_FLOW_PERMANENT;
@@ -745,8 +741,6 @@ learn_learn_format(const struct ofpact_learn_learn *learn, struct ds *s)
 	ds_put_format(s, ",cookie=%#"PRIx64, learn->cookie);
     }
 
-    //ds_put_format(s, ",learn_on_timeout=%"PRIu8, learn->learn_on_timeout);
-
     if (learn->table_spec == LEARN_USING_INGRESS_ATOMIC_TABLE) {
 	ds_put_cstr(s, ",table_spec=LEARN_USING_INGRESS_ATOMIC_TABLE");
     } else if (learn->table_spec == LEARN_USING_EGRESS_ATOMIC_TABLE) {
@@ -820,7 +814,6 @@ learn_learn_format(const struct ofpact_learn_learn *learn, struct ds *s)
 	}
 	if (spec->defer_count < 0xff) {
 	    ds_put_format(s, "(defer=%" PRIu8 ")", spec->defer_count);
-	    //ds_put_cstr(s, "(some defer)");
 	}
     }
     ds_put_cstr(s, ",actions=");
@@ -834,89 +827,3 @@ learn_learn_format(const struct ofpact_learn_learn *learn, struct ds *s)
     }
     ds_put_char(s, ')');
 }
-
-
-
-#if 0
-
-static unsigned int
-learn_min_len(uint16_t header)
-{
-    int n_bits = header & NX_LEARN_N_BITS_MASK;
-    int src_type = header & NX_LEARN_SRC_MASK;
-    int dst_type = header & NX_LEARN_DST_MASK;
-    unsigned int min_len;
-
-    min_len = 0;
-    if (src_type == NX_LEARN_SRC_FIELD) {
-	min_len += sizeof(ovs_be32); /* src_field */
-	min_len += sizeof(ovs_be16); /* src_ofs */
-    } else {
-	min_len += DIV_ROUND_UP(n_bits, 16);
-    }
-    if (dst_type == NX_LEARN_DST_MATCH ||
-	dst_type == NX_LEARN_DST_LOAD) {
-	min_len += sizeof(ovs_be32); /* dst_field */
-	min_len += sizeof(ovs_be16); /* dst_ofs */
-    }
-    return min_len;
-}
-
-static uint8_t
-get_u8(const void **pp) {
-    const uint8_t *p = *pp;
-    uint8_t value = *p;
-    *pp = p + 1;
-    return value;
-}
-
-static ovs_be16
-get_be16(const void **pp)
-{
-    const ovs_be16 *p = *pp;
-    ovs_be16 value = *p;
-    *pp = p + 1;
-    return value;
-}
-
-static ovs_be32
-get_be32(const void **pp)
-{
-    const ovs_be32 *p = *pp;
-    ovs_be32 value = get_unaligned_be32(p);
-    *pp = p + 1;
-    return value;
-}
-
-static void
-get_subfield(int n_bits, const void **p, struct mf_subfield *sf)
-{
-    sf->field = mf_from_nxm_header(ntohl(get_be32(p)));
-    sf->ofs = ntohs(get_be16(p));
-    sf->n_bits = n_bits;
-}
-
-static void
-put_be16(struct ofpbuf *b, ovs_be16 x)
-{
-    ofpbuf_put(b, &x, sizeof x);
-}
-
-static void
-put_be32(struct ofpbuf *b, ovs_be32 x)
-{
-    ofpbuf_put(b, &x, sizeof x);
-}
-
-static void
-put_u16(struct ofpbuf *b, uint16_t x)
-{
-    put_be16(b, htons(x));
-}
-
-static void
-put_u32(struct ofpbuf *b, uint32_t x)
-{
-    put_be32(b, htonl(x));
-}
-#endif

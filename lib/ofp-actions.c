@@ -5371,7 +5371,6 @@ encode_LEARN_LEARN(const struct ofpact_learn_learn *learn,
 
 	if (spec->src_type == NX_LEARN_SRC_FIELD) {
 	    put_u32(openflow, mf_nxm_header(spec->src.field->id));
-//	    put_u32(openflow, spec->src.field->nxm_header);
 	    put_u16(openflow, spec->src.ofs);
 	} else {
 	    size_t n_dst_bytes = 2 * DIV_ROUND_UP(spec->n_bits, 16);
@@ -5385,7 +5384,6 @@ encode_LEARN_LEARN(const struct ofpact_learn_learn *learn,
 	if (spec->dst_type == NX_LEARN_DST_MATCH ||
 	    spec->dst_type == NX_LEARN_DST_LOAD) {
 	    put_u32(openflow, mf_nxm_header(spec->dst.field->id));
-//	    put_u32(openflow, spec->dst.field->nxm_header);
 	    put_u16(openflow, spec->dst.ofs);
 	}
 
@@ -5464,7 +5462,6 @@ decode_NXAST_RAW_LEARN_LEARN(const struct nx_action_learn_learn *nal,
     end = (char *) nal + ntohs(nal->len);
     spec_end = (char *) end - ntohl(nal->ofpacts_len) - nal->rear_padding;
     spec_end = (char *) p + ntohl(nal->spec_len);
-    //spec_end = (char *) (nal + 1) + ntohl(nal->n_specs)*sizeof(struct ofpact_learn_spec);
 
     for (p = nal + 1; p != spec_end; ) {
 	uint8_t deferal_count;
@@ -5504,10 +5501,6 @@ decode_NXAST_RAW_LEARN_LEARN(const struct nx_action_learn_learn *nal,
 	}
 
 	if ((char *) spec_end - (char *) p < learn_min_len(header)) {
-	    //fprintf(stderr, "learn_learn_from_openflow BAD LEN\n");
-	    //fprintf(stderr, " p=%p nal+1=%p end=%p spec_end=%p learn_min_len(header)=%u\n",
-	    //        p, nal + 1, end, spec_end, learn_min_len(header));
-	    //fprintf(stderr, "difference=%u\n", (char *) spec_end - (char *) p);
 	    return OFPERR_OFPBAC_BAD_LEN;
 	}
 
@@ -5544,18 +5537,11 @@ decode_NXAST_RAW_LEARN_LEARN(const struct nx_action_learn_learn *nal,
     ofpbuf_init(&converted_learn_ofpacts, 1024);
 
     // But data in learn_ofpacts
-    //ofpbuf_put_zeros(ofpacts, ofpacts_len);
     ofpbuf_put(&learn_ofpacts, spec_end, ofpacts_len);
 
     learn = ofpacts->header;
-    //ofpbuf_put(&learn_ofpacts, spec_end, ofpacts_len);
-    // *** TODO ***
-    // ofpacts_pull_openflow10(&learn_ofpacts, ofpacts_len, &converted_learn_ofpacts);
     ofpacts_pull_openflow_actions(&learn_ofpacts, ofpacts_len, version, &converted_learn_ofpacts);
     learn->ofpacts_len = converted_learn_ofpacts.size;
-
-    //fprintf(stderr, "converted_learn_ofpacts.size=%u learn_ofpacts.size=%u learn->ofpacts_len=%u learn->n_specs=%u\n",
-	  //  converted_learn_ofpacts.size, learn_ofpacts.size, learn->ofpacts_len, learn->n_specs);
 
     // Add the data to ofpacts
     ofpbuf_put(ofpacts, converted_learn_ofpacts.data, converted_learn_ofpacts.size);
@@ -5565,8 +5551,6 @@ decode_NXAST_RAW_LEARN_LEARN(const struct nx_action_learn_learn *nal,
     ofpbuf_uninit(&learn_ofpacts);
     ofpbuf_uninit(&converted_learn_ofpacts);
 
-    //learn->data = learn + 1;
-    //learn->data = (char *) learn + offsetof(struct ofpact_learn_learn, data);
     learn = ofpacts->header;
     ofpact_update_len(ofpacts, &learn->ofpact);
 
@@ -5574,13 +5558,6 @@ decode_NXAST_RAW_LEARN_LEARN(const struct nx_action_learn_learn *nal,
     // between the p and end because of the action data.
     if ((char *) spec_end - (char *) p <= 0) {
 	return 0;
-    }
-    //if (!is_all_zeros(p, (char *) spec_end - (char *) p)) {
-    //    return OFPERR_OFPBAC_BAD_ARGUMENT;
-    //}
-
-    if (learn->ofpacts_len == 0 && nal->ofpacts_len > 0) {
-	//fprintf(stderr, "******************* learn_learn_from_openflow loses actions ****\n");
     }
 
     return 0;
