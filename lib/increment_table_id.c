@@ -99,7 +99,7 @@ increment_table_counter(uint8_t counter_spec, uint8_t inc)
 	    VLOG_DBG("Incrementing ingress table id from:  %"PRIu8 ", inc:  %"PRIu8, orig, inc);
 	}
 
-	if((inc != 0) && ((orig % SIMON_TABLE_INC_WARN_INTERVAL) == 0)) {
+	if((inc != 0) && (orig != 0) && ((orig % SIMON_TABLE_INC_WARN_INTERVAL) == 0)) {
 	    VLOG_WARN("Used %"PRIu8" of %"PRIu8" ingress tables", orig, SIMON_TABLE_PRODUCTION_START);
 	}
 
@@ -111,7 +111,7 @@ increment_table_counter(uint8_t counter_spec, uint8_t inc)
 	    VLOG_DBG("Incrementing egress table id from:  %"PRIu8 ", inc:  %"PRIu8, orig, inc);
 	}
 
-	if((inc != 0) && ((orig % SIMON_TABLE_INC_WARN_INTERVAL) == 0)) {
+	if((inc != 0) && (orig != 0) && ((orig % SIMON_TABLE_INC_WARN_INTERVAL) == 0)) {
 	    VLOG_WARN("Used %"PRIu8" of %"PRIu8" egress tables",
 		      orig, SIMON_TABLE_RESERVED_START - SIMON_TABLE_EGRESS_START);
 	}
