@@ -1,0 +1,39 @@
+AT_BANNER([increment table id action])
+
+AT_SETUP([Increment table id table - Test ingress counter])
+# Set up flow tables
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+   add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2 -- \
+   add-port br0 p3 -- set Interface p3 type=dummy ofport_request=3])
+
+# Add first round of tables
+AT_DATA([flows.txt], [[
+table=150, priority=1, actions=increment_table_id(INGRESS)
+]])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+# Have a packet update the INGRESS counter. 
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(3),eth(src=11:22:33:44:55:66,dst=99:88:77:66:55:44)" -generate], [0], [stdout])
+
+# Add second round of rules
+AT_DATA([flows.txt], [[
+table=150, priority=2, action=learn_learn(use_atomic_table=INGRESS, priority=2, NXM_OF_ETH_DST[])
+]])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+# Have a packet do the learn
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(3),eth(src=11:22:33:44:55:66,dst=99:88:77:66:55:44)" -generate], [0], [stdout])
+
+# Add second round of rules
+
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0],
+[[ table=1, priority=2,dl_dst=99:88:77:66:55:44 actions=drop
+ table=150, priority=1 actions=increment_table_id(INGRESS)
+ table=150, priority=2 actions=learn_learn(table=1,priority=2,table_spec=LEARN_USING_INGRESS_ATOMIC_TABLE,NXM_OF_ETH_DST[],actions=)
+NXST_FLOW reply:
+]])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+

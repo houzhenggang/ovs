@@ -4056,7 +4056,7 @@ xlate_learn_learn_action(struct xlate_ctx *ctx,
 
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     learn_learn_execute(learn, &ctx->xin->flow, &fm, &ofpacts,
-        ctx->table_id);
+			ctx->table_id);
     ofproto_dpif_flow_mod(ctx->xbridge->ofproto, &fm);
     ofpbuf_uninit(&ofpacts);
 }

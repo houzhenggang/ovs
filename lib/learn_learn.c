@@ -718,7 +718,7 @@ learn_learn_format(const struct ofpact_learn_learn *learn, struct ds *s)
     struct match match;
 
     struct ofpact *ofpacts;
-    //const struct ofpact *a;
+    const struct ofpact *a;
 
     match_init_catchall(&match);
 
@@ -827,13 +827,11 @@ learn_learn_format(const struct ofpact_learn_learn *learn, struct ds *s)
 
     // Add actions
     ofpacts = (struct ofpact *) spec_end;
-#if 0
+
     OFPACT_FOR_EACH (a, ofpacts, learn->ofpacts_len) {
 	ofpact_format(a, s);
 	ds_put_char(s, ',');
     }
-#endif
-    ofpacts_format(ofpacts, learn->ofpacts_len, s);
     ds_put_char(s, ')');
 }
 

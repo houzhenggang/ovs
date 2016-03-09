@@ -40,6 +40,8 @@ TESTSUITE_AT = \
 	tests/lacp.at \
 	tests/lib.at \
 	tests/learn.at \
+	tests/learn_learn.at \
+	tests/increment_table_id.at \
 	tests/vconn.at \
 	tests/file_name.at \
 	tests/aes128.at \

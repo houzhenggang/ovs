@@ -1,0 +1,144 @@
+AT_BANNER([learn_learn action])
+
+AT_SETUP([learn_learn action - Install with no deferral])
+# Set up flow tables
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+   add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2 -- \
+   add-port br0 p3 -- set Interface p3 type=dummy ofport_request=3])
+
+# Add a single learn action and make sure it's there
+AT_DATA([flows.txt], [[
+table=1,priority=1,actions=learn_learn(table=2,NXM_OF_ETH_DST[]=NXM_OF_ETH_DST[](defer=0),actions={})
+]])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0],
+[[ table=1, priority=1 actions=learn_learn(table=2,NXM_OF_ETH_DST[](defer=0),actions=)
+NXST_FLOW reply:
+]])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([learn_learn action - Deferral using direct match])
+# Set up flow tables
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+   add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2 -- \
+   add-port br0 p3 -- set Interface p3 type=dummy ofport_request=3])
+
+AT_DATA([flows.txt], [[
+table=0,priority=1,actions=learn_learn(table=0,priority=2,actions={learn_learn(table=1,priority=2,NXM_OF_ETH_DST[]=NXM_OF_ETH_DST[](defer=0))})
+]])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+# Have a packet delete all rules in table 201
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(3),eth(src=11:22:33:44:55:66,dst=99:88:77:66:55:44)" -generate], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(3),eth(src=11:22:33:44:55:66,dst=99:88:77:66:55:44)" -generate], [0], [stdout])
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0],
+[[ priority=1 actions=learn_learn(table=0,priority=2,actions=learn_learn(table=1,priority=2,NXM_OF_ETH_DST[](defer=0),actions=),)
+ priority=2 actions=learn_learn(table=1,priority=2,eth_dst=99:88:77:66:55:44,actions=)
+ table=1, priority=2,dl_dst=99:88:77:66:55:44 actions=drop
+NXST_FLOW reply:
+]])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([learn_learn action - Deferral using inverted eth src/dst])
+# Set up flow tables
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+   add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2 -- \
+   add-port br0 p3 -- set Interface p3 type=dummy ofport_request=3])
+
+AT_DATA([flows.txt], [[
+table=0 priority=1 actions=learn_learn(table=0,priority=2,actions={learn_learn(table=0,priority=3,NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[](defer=0))})
+]])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+# Have a packet delete all rules in table 201
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(3),eth(src=11:22:33:44:55:66,dst=99:88:77:66:55:44)" -generate], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(3),eth(src=11:22:33:44:55:66,dst=99:88:77:66:55:44)" -generate], [0], [stdout])
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0],
+[[ priority=1 actions=learn_learn(table=0,priority=2,actions=learn_learn(table=0,priority=3,NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[](defer=0),actions=),)
+ priority=2 actions=learn_learn(table=0,priority=3,eth_dst=11:22:33:44:55:66,actions=)
+ priority=3,dl_dst=11:22:33:44:55:66 actions=drop
+NXST_FLOW reply:
+]])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([learn_learn action - Deferral using direct match])
+# Set up flow tables
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+   add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2 -- \
+   add-port br0 p3 -- set Interface p3 type=dummy ofport_request=3])
+
+AT_DATA([flows.txt], [[
+table=0,priority=1,actions=learn_learn(table=0,priority=2,actions={learn_learn(table=1,priority=2,NXM_OF_ETH_DST[]=NXM_OF_ETH_DST[](defer=0))})
+]])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+# Have a packet delete all rules in table 201
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(3),eth(src=11:22:33:44:55:66,dst=99:88:77:66:55:44)" -generate], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(3),eth(src=11:22:33:44:55:66,dst=99:88:77:66:55:44)" -generate], [0], [stdout])
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0],
+[[ priority=1 actions=learn_learn(table=0,priority=2,actions=learn_learn(table=1,priority=2,NXM_OF_ETH_DST[](defer=0),actions=),)
+ priority=2 actions=learn_learn(table=1,priority=2,eth_dst=99:88:77:66:55:44,actions=)
+ table=1, priority=2,dl_dst=99:88:77:66:55:44 actions=drop
+NXST_FLOW reply:
+]])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([learn_learn action - Multiple layers of deferral])
+# Set up flow tables
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+   add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2 -- \
+   add-port br0 p3 -- set Interface p3 type=dummy ofport_request=3])
+
+AT_DATA([flows.txt], [[
+table=0 ip priority=1 actions=learn_learn(table=0,priority=2,eth_type=0x0800,nw_proto=6,actions={learn_learn(table=0,priority=3,eth_type=0x0800,nw_proto=6,NXM_OF_ETH_DST[]=NXM_OF_ETH_DST[](defer=0),actions={learn_learn(table=0,priority=10,eth_type=0x800,nw_proto=6,NXM_OF_IP_DST[]=NXM_OF_IP_SRC[](defer=1),actions={note:00.00.00})})})
+]])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+# Have a packet delete all rules in table 201
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(3),eth(src=11:22:33:44:55:66,dst=88:88:88:88:88:88),eth_type(0x0800),ipv4(src=1.1.1.1,dst=7.7.7.7,proto=6,tos=0,ttl=64,frag=no)" -generate], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(3),eth(src=33:33:33:33:33:33,dst=44:44:44:44:44:44),eth_type(0x0800),ipv4(src=2.2.2.2,dst=7.7.7.7,proto=6,tos=0,ttl=64,frag=no)" -generate], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(3),eth(src=33:33:33:33:33:33,dst=88:88:88:88:88:88),eth_type(0x0800),ipv4(src=6.6.6.6,dst=2.2.2.2,proto=6,tos=0,ttl=64,frag=no)" -generate], [0], [stdout])
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0],
+[[ priority=1,ip actions=learn_learn(table=0,priority=2,eth_type=0x800,nw_proto=6,actions=learn_learn(table=0,priority=3,eth_type=0x800,nw_proto=6,NXM_OF_ETH_DST[](defer=0),actions=learn_learn(table=0,priority=10,eth_type=0x800,nw_proto=6,NXM_OF_IP_DST[]=NXM_OF_IP_SRC[](defer=1),actions=note:00.00.00.00.00.00,),),)
+ priority=10,tcp,nw_dst=2.2.2.2 actions=note:00.00.00.00.00.00
+ priority=2,tcp actions=learn_learn(table=0,priority=3,eth_type=0x800,nw_proto=6,eth_dst=88:88:88:88:88:88,actions=learn_learn(table=0,priority=10,eth_type=0x800,nw_proto=6,NXM_OF_IP_DST[]=NXM_OF_IP_SRC[](defer=0),actions=note:00.00.00.00.00.00,),)
+ priority=3,tcp,dl_dst=88:88:88:88:88:88 actions=learn_learn(table=0,priority=10,eth_type=0x800,nw_proto=6,ip_dst=2.2.2.2,actions=note:00.00.00.00.00.00,)
+NXST_FLOW reply:
+]])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([learn_learn action - Learning with inner learn_delete])
+# Set up flow tables
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- set Interface p1 type=dummy ofport_request=1 -- \
+   add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2 -- \
+   add-port br0 p3 -- set Interface p3 type=dummy ofport_request=3])
+
+AT_DATA([flows.txt], [[
+table=0, priority=0, actions=learn_learn(table=0, priority=2, actions={learn_delete(table=2, NXM_OF_ETH_DST[]=NXM_OF_ETH_DST[](defer=0))})
+table=2, priority=25, eth_dst=99:88:77:66:55:44, actions=note:00.00.00
+]])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+# Have a packet delete all rules in table 201
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(3),eth(src=11:22:33:44:55:66,dst=99:88:77:66:55:44)" -generate], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(3),eth(src=11:22:33:44:55:66,dst=99:88:77:66:55:44)" -generate], [0], [stdout])
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0],
+[[ priority=0 actions=learn_learn(table=150,priority=2,actions=learn_delete(table=2,NXM_OF_ETH_DST[](defer=0)),)
+ priority=2 actions=learn_delete(table=152,eth_dst=99:88:77:66:55:44)
+NXST_FLOW reply:
+]])
+OVS_VSWITCHD_STOP
+AT_CLEANUP

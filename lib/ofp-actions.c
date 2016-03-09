@@ -297,7 +297,7 @@ enum ofp_raw_action_type {
     /* NX1.0+(100): struct nx_action_increment_table_id.  */
     NXAST_RAW_INCREMENT_TABLE_ID,
 
-    /* NX1.0+(101): struct nx_action_learn_learn. */
+    /* NX1.0+(101): struct nx_action_learn_learn, ... */
     NXAST_RAW_LEARN_LEARN,
 
 /* ## ------------------ ## */
@@ -7251,7 +7251,7 @@ ofpacts_get_meter(const struct ofpact ofpacts[], size_t ofpacts_len)
 
 /* Formatting ofpacts. */
 
-static void
+void
 ofpact_format(const struct ofpact *a, struct ds *s)
 {
     switch (a->type) {
