@@ -126,7 +126,8 @@ void do_deferral(struct ofpact *ofpacts, uint32_t ofpacts_len,
 	if (a->type == OFPACT_LEARN_LEARN) {
 	    populate_deferral_values(ofpact_get_LEARN_LEARN(a), flow);
 	}
-#if 0
+// TODO:  Test after adding support for learn_delete
+#ifdef OFPACT_LEARN_DELETE
 	else if (a->type == OFPACT_LEARN_DELETE) {
 	    struct ofpact_learn_delete *del;
 
@@ -276,6 +277,8 @@ learn_learn_execute(const struct ofpact_learn_learn *learn,
 	    break;
 
 	case NX_LEARN_DST_LOAD:
+// TODO:  This was removed in place of the below solution,
+// need to test to confirm.
 #if 0
 	    for (ofs = 0; ofs < spec->n_bits; ofs += chunk) {
 		struct ofpact_reg_load *load;
@@ -316,7 +319,7 @@ learn_learn_execute(const struct ofpact_learn_learn *learn,
 		}
 	    }
 	    break;
-#if 0
+#if 0 // Removed since this was added by FAST, but we don't use it.
 	case NX_LEARN_DST_RESERVED:
 	    resubmit = ofpact_put_RESUBMIT(ofpacts);
 	    resubmit->ofpact.compat = OFPUTIL_NXAST_RESUBMIT_TABLE;
