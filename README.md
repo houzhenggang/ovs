@@ -116,21 +116,22 @@ matching on the result of the comparison in the egress tables.
 To perform comparisons, the input flow fields must be loaded into the
 following registers.
 
-**** INPUTS ****
-Reg | Function
-----:| ----
-  0  | Match tag
-  1  | Output status (output port)
-2-6  | Unused
-  7  | dl_type (2 bytes)
-  8  | Bits 31-16: dl_src[47:32], Bits 15-0:  dl_dst[47-32] (See note)
-  9  | dl_src[31:0]
- 10  | dl_dst[31:0]
- 11  | ip_proto (1 byte)
- 12  | ip_src (4 bytes)
- 13  | ip_dst (4 bytes)
- 14  | tp_src (2 bytes)
- 15  | tp_dst (2 bytes)
+#### Inputs
+
+ Reg | Function
+----:|----
+  0  | `Match tag`
+  1  | `Output status (output port)`
+2-6  | `Unused`
+  7  | `dl_type (2 bytes)`
+  8  | `Bits 31-16: dl_src[47:32], Bits 15-0:  dl_dst[47-32] (See note)`
+  9  | `dl_src[31:0]`
+ 10  | `dl_dst[31:0]`
+ 11  | `ip_proto (1 byte)`
+ 12  | `ip_src (4 bytes)`
+ 13  | `ip_dst (4 bytes)`
+ 14  | `tp_src (2 bytes)`
+ 15  | `tp_dst (2 bytes)`
 
 
 Since the dl_src and dst_fields are larger than a single 32-bit
@@ -143,24 +144,26 @@ of each field into the appropriate register.
 After the comparisons are performed, the results of each comparison
 are stored in the following registers.
 
+#### Outputs
+
 Reg  | Function
 ----:|----
-  0  | Match tag
-  1  | Output status (output port)
-  2  | p.dl_type  ==   p'.dl_type
-  3  | p.dl_src   ==   p'.dl_src
-  4  | p.dl_src   ==   p'.dl_dst
-  5  | p.dl_dst   ==   p'.dl_src
-  6  | p.dl_dst   ==   p'.dl_dst
-  7  | p.ip_proto ==   p'.ip_proto
-  8  | p.ip_src   ==   p'.ip_src
-  9  | p.ip_src   ==   p'.ip_dst
- 10  | p.ip_dst   ==   p'.ip_src
- 11  | p.ip_dst   ==   p'.ip_dst
- 12  | p.tp_src   ==   p'.tp_src
- 13  | p.tp_src   ==   p'.tp_dst
- 14  | p.tp_dst   ==   p'.tp_src
- 15  | p.tp_dst   ==   p'.tp_dst
+  0  | `Match tag`
+  1  | `Output status (output port)`
+  2  | `p.dl_type  ==   p'.dl_type`
+  3  | `p.dl_src   ==   p'.dl_src`
+  4  | `p.dl_src   ==   p'.dl_dst`
+  5  | `p.dl_dst   ==   p'.dl_src`
+  6  | `p.dl_dst   ==   p'.dl_dst`
+  7  | `p.ip_proto ==   p'.ip_proto`
+  8  | `p.ip_src   ==   p'.ip_src`
+  9  | `p.ip_src   ==   p'.ip_dst`
+ 10  | `p.ip_dst   ==   p'.ip_src`
+ 11  | `p.ip_dst   ==   p'.ip_dst`
+ 12  | `p.tp_src   ==   p'.tp_src`
+ 13  | `p.tp_src   ==   p'.tp_dst`
+ 14  | `p.tp_dst   ==   p'.tp_src`
+ 15  | `p.tp_dst   ==   p'.tp_dst`
 
 
 Note: Since there is no definitive way to know which fields have been
