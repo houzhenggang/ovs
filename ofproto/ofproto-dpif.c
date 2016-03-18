@@ -33,6 +33,7 @@
 #include "dpif.h"
 #include "dynamic-string.h"
 #include "fail-open.h"
+#include "flow.h"
 #include "guarded-list.h"
 #include "hmapx.h"
 #include "lacp.h"
@@ -71,6 +72,11 @@
 #include "unixctl.h"
 #include "vlan-bitmap.h"
 #include "openvswitch/vlog.h"
+
+#include "timeout_act.h"
+#include "learn_delete.h"
+#include "learn_learn.h"
+#include "increment_table_id.h"
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif);
 
@@ -5713,6 +5719,167 @@ ofproto_dpif_delete_internal_flow(struct ofproto_dpif *ofproto,
     }
 
     return 0;
+}
+
+/*
+* Actions taken cannot assume that there's a packet, because there isn't one.
+*/
+void timeout_act_execute(const struct ofpact_timeout_act *act,
+                         struct flow *flow, struct rule *rule)
+{
+    struct ofproto_dpif *ofproto;
+    struct ofpact_learn *learn;
+    struct ofpact *a;
+    struct ofputil_flow_mod fm;
+    struct flow_wildcards wc;
+
+    wc.masks = *flow;
+
+    ofproto = ofproto_dpif_cast(rule->ofproto);
+
+    struct ofpbuf ofpacts_buf;
+    struct ofpbuf stack;
+    uint64_t ofpacts_stub[1024 / 8];
+    uint64_t stack_stub[1024 / 8];
+    ofpbuf_use_stub(&ofpacts_buf, ofpacts_stub, sizeof ofpacts_stub);
+    ofpbuf_use_stub(&stack, stack_stub, sizeof stack_stub);
+    if (act->ofpacts && act->ofpacts_len > 0) {
+        OFPACT_FOR_EACH (a, act->ofpacts, act->ofpacts_len) {
+            switch (a->type) {
+                case OFPACT_LEARN:
+                    ofpbuf_use_stub(&ofpacts_buf, ofpacts_stub, sizeof ofpacts_stub);
+
+                    // Create flow_mod
+                    learn = ofpact_get_LEARN(a);
+
+                    if (!learn->learn_on_timeout) {
+                        continue;
+                    }
+
+                    // Populate fm with the learn attributes
+                    // TODO - 3rd arguement is ofpact*, but function takes in ofpbuf
+                    learn_execute(learn, flow, &fm, &ofpacts_buf);
+
+                    //ofproto_flow_mod(ofproto, &fm);
+                    ofproto_dpif_flow_mod(ofproto, &fm);
+                    ofpbuf_uninit(&ofpacts_buf);
+                    break;
+                case OFPACT_TIMEOUT_ACT:
+                    //timeout_act_execute(ofpact_get_TIMEOUT_ACT(a), flow, rule);
+                    break;
+                //case OFPACT_REG_LOAD:
+                //    nxm_execute_reg_load(ofpact_get_REG_LOAD(a), flow);
+                //    break;
+                //    // Do nothing in the default case, because it isn't supported.
+                case OFPACT_LEARN_DELETE:
+                    ofpbuf_use_stub(&ofpacts_buf, ofpacts_stub, sizeof ofpacts_stub);
+
+                    // Populate fm with the learn attributes
+                    //ovs_mutex_unlock(&ofproto_mutex);
+                    learn_delete_execute(ofpact_get_LEARN_DELETE(a), flow,
+                            &fm, &ofpacts_buf, rule->table_id);
+
+                    //ofproto_flow_mod(ofproto, &fm);
+                    ofproto_dpif_flow_mod(ofproto, &fm);
+                    ofpbuf_uninit(&ofpacts_buf);
+                    break;
+                case OFPACT_INCREMENT_TABLE_ID:
+                    increment_table_id_execute(ofpact_get_INCREMENT_TABLE_ID(a));
+                    break;
+                case OFPACT_LEARN_LEARN:
+                    ofpbuf_use_stub(&ofpacts_buf, ofpacts_stub, sizeof ofpacts_stub);
+
+                    learn_learn_execute(ofpact_get_LEARN_LEARN(a), flow, &fm,
+                            &ofpacts_buf, rule->table_id);
+                    //ofproto_flow_mod(ofproto, &fm);
+                    ofproto_dpif_flow_mod(ofproto, &fm);
+                    ofpbuf_uninit(&ofpacts_buf);
+                    break;
+
+                case OFPACT_CONTROLLER:
+                    // Do nothing, because there's no packet to send to
+                    // the controller
+                case OFPACT_OUTPUT:
+                    // No packet to output
+                case OFPACT_ENQUEUE:
+                case OFPACT_OUTPUT_REG:
+                    // Nothing to output
+                case OFPACT_BUNDLE:
+                    // No packet to bundle on
+                case OFPACT_SET_VLAN_VID:
+                    // No packet
+                case OFPACT_SET_VLAN_PCP:
+                    // No packet
+                case OFPACT_STRIP_VLAN:
+                    // No packet
+                case OFPACT_PUSH_VLAN:
+                    // No packet
+                case OFPACT_SET_ETH_SRC:
+                    // No packet
+                case OFPACT_SET_ETH_DST:
+                    // No packet
+                case OFPACT_SET_IPV4_SRC:
+                    // No packet
+                case OFPACT_SET_IPV4_DST:
+                    // No packet
+                //case OFPACT_SET_IPV4_DSCP:
+                    // No packet
+                case OFPACT_SET_L4_SRC_PORT:
+                    // No packet
+                case OFPACT_GROUP:
+                     
+                case OFPACT_SET_L4_DST_PORT:
+                    // No packet
+                    break;
+                case OFPACT_SET_FIELD:
+                    // TODO
+                    break;
+                case OFPACT_SET_IP_ECN:
+                case OFPACT_SET_IP_TTL:
+                case OFPACT_SET_MPLS_LABEL:
+                case OFPACT_SET_MPLS_TC:
+                case OFPACT_CONJUNCTION:
+                case OFPACT_UNROLL_XLATE:
+                case OFPACT_CT:
+                case OFPACT_DEBUG_RECIRC:
+                case OFPACT_WRITE_ACTIONS:
+                case OFPACT_SET_IP_DSCP:
+                    break;
+                case OFPACT_REG_MOVE:
+                    nxm_execute_reg_move(ofpact_get_REG_MOVE(a),
+                            flow, &wc);
+                    break;
+                case OFPACT_STACK_PUSH:
+                    nxm_execute_stack_push(ofpact_get_STACK_PUSH(a),
+                            flow, &wc, &stack);
+                    break;
+                case OFPACT_STACK_POP:
+                    nxm_execute_stack_pop(ofpact_get_STACK_POP(a),
+                            flow, &wc, &stack);
+                    break;
+                case OFPACT_DEC_TTL:
+                case OFPACT_SET_MPLS_TTL:
+                case OFPACT_DEC_MPLS_TTL:
+                case OFPACT_PUSH_MPLS:
+                case OFPACT_POP_MPLS:
+                case OFPACT_SET_TUNNEL:
+                case OFPACT_SET_QUEUE:
+                case OFPACT_POP_QUEUE:
+                case OFPACT_FIN_TIMEOUT:
+                case OFPACT_RESUBMIT:
+                case OFPACT_MULTIPATH:
+                case OFPACT_NOTE:
+                case OFPACT_EXIT:
+                case OFPACT_SAMPLE:
+                case OFPACT_METER:
+                case OFPACT_CLEAR_ACTIONS:
+                case OFPACT_WRITE_METADATA:
+                case OFPACT_GOTO_TABLE:
+                    break;
+            }
+        }
+    }
+
 }
 
 const struct ofproto_class ofproto_dpif_class = {

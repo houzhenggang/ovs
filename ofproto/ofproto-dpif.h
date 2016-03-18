@@ -32,6 +32,7 @@
 
 union user_action_cookie;
 struct dpif_flow_stats;
+struct ofpact_timeout_act;
 struct ofproto;
 struct ofproto_dpif;
 struct ofproto_packet_in;
@@ -231,4 +232,8 @@ static inline bool rule_dpif_is_internal(const struct rule_dpif *rule)
 #undef RULE_CAST
 
 bool ovs_native_tunneling_is_on(struct ofproto_dpif *ofproto);
+
+void timeout_act_execute(const struct ofpact_timeout_act *, struct flow *,
+                         struct rule *);
+
 #endif /* ofproto-dpif.h */

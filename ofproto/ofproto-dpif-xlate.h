@@ -35,6 +35,8 @@ struct dpif_ipfix;
 struct dpif_sflow;
 struct mac_learning;
 struct mcast_snooping;
+struct ofpact_timeout_act;
+struct rule;
 struct xlate_cache;
 
 struct xlate_out {

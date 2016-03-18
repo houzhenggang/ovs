@@ -37,6 +37,8 @@
 
 #include "increment_table_id.h"
 #include "learn_learn.h"
+#include "learn_delete.h"
+#include "timeout_act.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_actions);
 
@@ -300,6 +302,13 @@ enum ofp_raw_action_type {
     /* NX1.0+(101): struct nx_action_learn_learn, ... */
     NXAST_RAW_LEARN_LEARN,
 
+    /* NX1.0+(102): struct nx_action_learn_delete, ... */
+    NXAST_RAW_LEARN_DELETE,
+
+    /* NX1.0+(103): struct nx_action_timeout_act, ... */
+    NXAST_RAW_TIMEOUT_ACT,
+    
+
 /* ## ------------------ ## */
 /* ## Debugging actions. ## */
 /* ## ------------------ ## */
@@ -413,7 +422,9 @@ ofpact_next_flattened(const struct ofpact *ofpact)
     case OFPACT_LEARN:
     case OFPACT_CONJUNCTION:
     case OFPACT_INCREMENT_TABLE_ID:
+    case OFPACT_TIMEOUT_ACT:
     case OFPACT_LEARN_LEARN:
+    case OFPACT_LEARN_DELETE:
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
     case OFPACT_EXIT:
@@ -5444,18 +5455,18 @@ decode_NXAST_RAW_LEARN_LEARN(const struct nx_action_learn_learn *nal,
 
     /* We only support "send-flow-removed" for now. */
     switch (ntohs(nal->flags)) {
-    case 0:
-	learn->flags = 0;
-	break;
-    case OFPFF_SEND_FLOW_REM:
-	learn->flags = OFPUTIL_FF_SEND_FLOW_REM;
-	break;
-    default:
-	return OFPERR_OFPBAC_BAD_ARGUMENT;
+        case 0:
+            learn->flags = 0;
+            break;
+        case OFPFF_SEND_FLOW_REM:
+            learn->flags = OFPUTIL_FF_SEND_FLOW_REM;
+            break;
+        default:
+            return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
     if (learn->table_id == 0xff) {
-	return OFPERR_OFPBAC_BAD_ARGUMENT;
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
     p = nal + 1;
@@ -5464,67 +5475,67 @@ decode_NXAST_RAW_LEARN_LEARN(const struct nx_action_learn_learn *nal,
     spec_end = (char *) p + ntohl(nal->spec_len);
 
     for (p = nal + 1; p != spec_end; ) {
-	uint8_t deferal_count;
-	struct ofpact_learn_spec *spec;
-	uint16_t header = ntohs(get_be16(&p));
+        uint8_t deferal_count;
+        struct ofpact_learn_spec *spec;
+        uint16_t header = ntohs(get_be16(&p));
 
-	if ((char *) spec_end - (char *) p == 0) {
-	    break;
-	}
+        if ((char *) spec_end - (char *) p == 0) {
+            break;
+        }
 
-	if (!header) {
-	    break;
-	}
+        if (!header) {
+            break;
+        }
 
-	/* Check that the arguments don't overrun the end of the action. */
-	if ((char *) spec_end - (char *) p <= 0) {
-	    break;
-	}
+        /* Check that the arguments don't overrun the end of the action. */
+        if ((char *) spec_end - (char *) p <= 0) {
+            break;
+        }
 
-	spec = ofpbuf_put_zeros(ofpacts, sizeof *spec);
-	learn = ofpacts->header;
-	learn->n_specs++;
+        spec = ofpbuf_put_zeros(ofpacts, sizeof *spec);
+        learn = ofpacts->header;
+        learn->n_specs++;
 
-	spec->src_type = header & NX_LEARN_SRC_MASK;
-	spec->dst_type = header & NX_LEARN_DST_MASK;
-	spec->n_bits = header & NX_LEARN_N_BITS_MASK;
+        spec->src_type = header & NX_LEARN_SRC_MASK;
+        spec->dst_type = header & NX_LEARN_DST_MASK;
+        spec->n_bits = header & NX_LEARN_N_BITS_MASK;
 
-	/* Check for valid src and dst type combination. */
-	if (spec->dst_type == NX_LEARN_DST_MATCH ||
-	    spec->dst_type == NX_LEARN_DST_LOAD ||
-	    spec->dst_type == NX_LEARN_DST_RESERVED ||
-	    (spec->dst_type == NX_LEARN_DST_OUTPUT &&
-	     spec->src_type == NX_LEARN_SRC_FIELD)) {
-	    /* OK. */
-	} else {
-	    return OFPERR_OFPBAC_BAD_ARGUMENT;
-	}
+        /* Check for valid src and dst type combination. */
+        if (spec->dst_type == NX_LEARN_DST_MATCH ||
+                spec->dst_type == NX_LEARN_DST_LOAD ||
+                spec->dst_type == NX_LEARN_DST_RESERVED ||
+                (spec->dst_type == NX_LEARN_DST_OUTPUT &&
+                 spec->src_type == NX_LEARN_SRC_FIELD)) {
+            /* OK. */
+        } else {
+            return OFPERR_OFPBAC_BAD_ARGUMENT;
+        }
 
-	if ((char *) spec_end - (char *) p < learn_min_len(header)) {
-	    return OFPERR_OFPBAC_BAD_LEN;
-	}
+        if ((char *) spec_end - (char *) p < learn_min_len(header)) {
+            return OFPERR_OFPBAC_BAD_LEN;
+        }
 
-	/* Get the source. */
-	if (spec->src_type == NX_LEARN_SRC_FIELD) {
-	    get_subfield(spec->n_bits, &p, &spec->src);
-	} else {
-	    int p_bytes = 2 * DIV_ROUND_UP(spec->n_bits, 16);
+        /* Get the source. */
+        if (spec->src_type == NX_LEARN_SRC_FIELD) {
+            get_subfield(spec->n_bits, &p, &spec->src);
+        } else {
+            int p_bytes = 2 * DIV_ROUND_UP(spec->n_bits, 16);
 
-	    bitwise_copy(p, p_bytes, 0,
-			 &spec->src_imm, sizeof spec->src_imm, 0,
-			 spec->n_bits);
-	    p = (const uint8_t *) p + p_bytes;
-	}
+            bitwise_copy(p, p_bytes, 0,
+                    &spec->src_imm, sizeof spec->src_imm, 0,
+                    spec->n_bits);
+            p = (const uint8_t *) p + p_bytes;
+        }
 
-	/* Get the destination. */
-	if (spec->dst_type == NX_LEARN_DST_MATCH ||
-	    spec->dst_type == NX_LEARN_DST_LOAD) {
-	    get_subfield(spec->n_bits, &p, &spec->dst);
-	}
+        /* Get the destination. */
+        if (spec->dst_type == NX_LEARN_DST_MATCH ||
+                spec->dst_type == NX_LEARN_DST_LOAD) {
+            get_subfield(spec->n_bits, &p, &spec->dst);
+        }
 
-	// Populate deferral count
-	deferal_count = get_u8(&p);
-	spec->defer_count = deferal_count;
+        // Populate deferral count
+        deferal_count = get_u8(&p);
+        spec->defer_count = deferal_count;
     }
 
 
@@ -5557,7 +5568,7 @@ decode_NXAST_RAW_LEARN_LEARN(const struct nx_action_learn_learn *nal,
     // TODO Ensure this change was okay, there will be data
     // between the p and end because of the action data.
     if ((char *) spec_end - (char *) p <= 0) {
-	return 0;
+        return 0;
     }
 
     return 0;
@@ -5590,6 +5601,288 @@ format_LEARN_LEARN(const struct ofpact_learn_learn *learn, struct ds *s)
     learn_learn_format(learn, s);
 }
 
+/* NXAST_RAW_LEARN_LEARN */
+struct nx_action_learn_delete {
+    ovs_be16 type;              /* OFPAT_VENDOR. */
+    ovs_be16 len;               /* At least 24. */
+    ovs_be32 vendor;            /* NX_VENDOR_ID. */
+    ovs_be16 subtype;           /* NXAST_LEARN_DELETE. */
+    ovs_be16 flags;             /* Either 0 or OFPFF_SEND_FLOW_REM. */
+    uint8_t table_id;           /* Table to insert flow entry. */
+    uint8_t table_spec;
+    ovs_be16 priority;          /* Priority level of flow entry. */
+    ovs_be64 cookie;            /* Cookie for new flow. */
+    ovs_be32 n_specs;
+    uint8_t pad[4];
+    /* Followed by a sequence of flow_mod_spec elements, as described above,
+     * until the end of the action is reached. */
+};
+OFP_ASSERT(sizeof(struct nx_action_learn_delete) == 32);
+
+// TODO Port learn_delete_to_nxast
+void encode_LEARN_DELETE(const struct ofpact_learn_delete *learn,
+        enum ofp_version version OVS_UNUSED, struct ofpbuf *openflow) {
+    // TODO - Check
+
+    const struct ofpact_learn_spec *spec;
+    struct nx_action_learn_delete *nal;
+    size_t start_ofs;
+    unsigned int n_specs;
+
+    n_specs = 0;
+
+    start_ofs = openflow->size;
+    nal = put_NXAST_LEARN_DELETE(openflow);
+    nal->priority = htons(learn->priority);
+    nal->cookie = htonll(learn->cookie);
+    nal->flags = htons(learn->flags);
+    nal->table_id = learn->table_id;
+    nal->table_spec = learn->table_spec;
+
+    for (spec = learn->specs; spec < &learn->specs[learn->n_specs]; spec++) {
+        put_u16(openflow, spec->n_bits | spec->dst_type | spec->src_type);
+
+        if (spec->src_type == NX_LEARN_SRC_FIELD) {
+            put_u32(openflow, mf_nxm_header(spec->src.field->id));
+            put_u16(openflow, spec->src.ofs);
+        } else {
+            size_t n_dst_bytes = 2 * DIV_ROUND_UP(spec->n_bits, 16);
+            uint8_t *bits = ofpbuf_put_zeros(openflow, n_dst_bytes);
+            bitwise_copy(&spec->src_imm, sizeof spec->src_imm, 0,
+                    bits, n_dst_bytes, 0,
+                    spec->n_bits);
+        }
+
+        if (spec->dst_type == NX_LEARN_DST_MATCH ||
+                spec->dst_type == NX_LEARN_DST_LOAD) {
+            put_u32(openflow, mf_nxm_header(spec->dst.field->id));
+            put_u16(openflow, spec->dst.ofs);
+        }
+
+        // Add the defer count
+        ofpbuf_put(openflow, &spec->defer_count, sizeof spec->defer_count);
+        n_specs++;
+    }
+
+    if ((openflow->size - start_ofs) % 8) {
+        ofpbuf_put_zeros(openflow, 8 - (openflow->size - start_ofs) % 8);
+    }
+
+    nal->n_specs = n_specs;
+    nal = ofpbuf_at_assert(openflow, start_ofs, sizeof *nal);
+    nal->len = htons(openflow->size - start_ofs);
+}
+
+// TODO Port learn_delete_from_openflow
+enum ofperr
+decode_NXAST_RAW_LEARN_DELETE(const struct nx_action_learn_delete *nal,
+        enum ofp_version version OVS_UNUSED, struct ofpbuf *ofpacts) {
+    // TODO - Check
+
+    struct ofpact_learn_delete *learn;
+    const void *p, *end;
+
+    learn = ofpact_put_LEARN_DELETE(ofpacts);
+
+    learn->priority = ntohs(nal->priority);
+    learn->cookie = ntohll(nal->cookie);
+    learn->table_id = nal->table_id;
+    learn->table_spec = nal->table_spec;
+
+    /* We only support "send-flow-removed" for now. */
+    switch (ntohs(nal->flags)) {
+        case 0:
+            learn->flags = 0;
+            break;
+        case OFPFF_SEND_FLOW_REM:
+            learn->flags = OFPUTIL_FF_SEND_FLOW_REM;
+            break;
+        default:
+            return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
+    if (learn->table_id == 0xff) {
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
+    end = (char *) nal + ntohs(nal->len);
+
+    for (p = nal + 1; p != end; ) {
+        if ((char *) end - (char *) p == 0) {
+            break;
+        }
+
+        struct ofpact_learn_spec *spec;
+        uint16_t header = ntohs(get_be16(&p));
+
+        if (!header) {
+            break;
+        } else if ((char *) end - (char *) p <= 0) {
+            break;
+        }
+
+        spec = ofpbuf_put_zeros(ofpacts, sizeof *spec);
+        learn = ofpacts->header;
+        learn->n_specs++;
+
+
+        spec->src_type = header & NX_LEARN_SRC_MASK;
+        spec->dst_type = header & NX_LEARN_DST_MASK;
+        spec->n_bits = header & NX_LEARN_N_BITS_MASK;
+
+        /* Check for valid src and dst type combination. */
+        if (spec->dst_type == NX_LEARN_DST_MATCH ||
+                spec->dst_type == NX_LEARN_DST_LOAD ||
+                spec->dst_type == NX_LEARN_DST_RESERVED ||
+                (spec->dst_type == NX_LEARN_DST_OUTPUT &&
+                 spec->src_type == NX_LEARN_SRC_FIELD)) {
+            /* OK. */
+        } else {
+            return OFPERR_OFPBAC_BAD_ARGUMENT;
+        }
+
+        /* Check that the arguments don't overrun the end of the action. */
+        if ((char *) end - (char *) p < learn_min_len(header)) {
+            return OFPERR_OFPBAC_BAD_LEN;
+        }
+
+        /* Get the source. */
+        if (spec->src_type == NX_LEARN_SRC_FIELD) {
+            get_subfield(spec->n_bits, &p, &spec->src);
+        } else {
+            int p_bytes = 2 * DIV_ROUND_UP(spec->n_bits, 16);
+
+            bitwise_copy(p, p_bytes, 0,
+                    &spec->src_imm, sizeof spec->src_imm, 0,
+                    spec->n_bits);
+            p = (const uint8_t *) p + p_bytes;
+        }
+
+        /* Get the destination. */
+        if (spec->dst_type == NX_LEARN_DST_MATCH ||
+                spec->dst_type == NX_LEARN_DST_LOAD) {
+            get_subfield(spec->n_bits, &p, &spec->dst);
+        }
+
+        uint8_t deferal_count = get_u8(&p);
+        spec->defer_count = deferal_count;
+    }
+
+    ofpact_update_len(ofpacts, &learn->ofpact);
+
+    if ((char *) end - (char *) p <= 0) {
+        return 0;
+    }
+    if (!is_all_zeros(p, (char *) end - (char *) p)) {
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
+    return 0;
+
+}
+
+/* Parses 'arg' as a set of arguments to the "learn" action and appends a
+ * matching OFPACT_LEARN action to 'ofpacts'.  ovs-ofctl(8) describes the
+ * format parsed.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string.
+ *
+ * If 'flow' is nonnull, then it should be the flow from a struct match that is
+ * the matching rule for the learning action.  This helps to better validate
+ * the action's arguments.
+ *
+ * Modifies 'arg'. */
+char * OVS_WARN_UNUSED_RESULT
+parse_LEARN_DELETE(char *arg, struct ofpbuf *ofpacts,
+        enum ofputil_protocol *usable_protocols) 
+{
+    return learn_delete_parse(arg, ofpacts, usable_protocols);
+}
+
+/* Appends a description of 'learn' to 's', in the format that ovs-ofctl(8)
+ * describes. */
+void
+format_LEARN_DELETE(const struct ofpact_learn_delete *learn, struct ds *s)
+{
+    learn_delete_format(learn, s);
+}
+
+struct nx_action_timeout_act {
+    ovs_be16 type;
+    ovs_be16 len;
+    ovs_be32 vendor;
+    ovs_be16 subtype;
+    ovs_be16 ofpacts_len;
+    uint8_t pad[4];
+    /* Followed by a sequence of ofpact data */
+};
+OFP_ASSERT(sizeof(struct nx_action_timeout_act) == 16);
+
+// TODO Port timeout_act_to_nxast
+void encode_TIMEOUT_ACT(const struct ofpact_timeout_act *act,
+        enum ofp_version version OVS_UNUSED, struct ofpbuf *openflow)
+{
+    struct nx_action_timeout_act *nta;
+    size_t start_ofs = openflow->size;
+    //unsigned int remainder;
+    //unsigned int len;
+
+    nta = put_NXAST_TIMEOUT_ACT(openflow);
+    nta->ofpacts_len = htons(act->ofpacts_len);
+
+    ofpacts_put_openflow_actions(act->ofpacts, act->ofpacts_len, openflow, version);
+
+    if ((openflow->size - start_ofs) % 8) {
+        ofpbuf_put_zeros(openflow, 8 - (openflow->size - start_ofs) % 8);
+    }
+
+    nta = ofpbuf_at(openflow, start_ofs, sizeof *nta);
+    nta->len = htons(openflow->size - start_ofs);
+}
+
+// TODO Port timeout_act_from_openflow
+enum ofperr
+decode_NXAST_RAW_TIMEOUT_ACT(const struct nx_action_timeout_act *nta,
+        enum ofp_version version OVS_UNUSED, struct ofpbuf *out)
+{
+    struct ofpact_timeout_act *timeout_act;
+    //struct ofpact *ofpacts;
+    //unsigned int length;
+    struct ofpbuf timeout_ofpacts;
+    ofpbuf_init(&timeout_ofpacts, 32);
+    struct ofpbuf converted_timeout_ofpacts;
+    ofpbuf_init(&converted_timeout_ofpacts, 32);
+
+    timeout_act = ofpact_put_TIMEOUT_ACT(out);
+    //ofpacts = ofpbuf_put_zeros(out, ntohs(nta->ofpacts_len));
+    ofpbuf_put_zeros(out, ntohs(nta->ofpacts_len));
+    ofpbuf_put(&timeout_ofpacts, nta + 1, timeout_act->ofpacts_len);
+
+    timeout_act = out->header;
+    timeout_act->ofpacts_len = ntohs(nta->ofpacts_len);
+    ofpbuf_put(&timeout_ofpacts, nta + 1, timeout_act->ofpacts_len);
+    ofpacts_pull_openflow_actions(&timeout_ofpacts, timeout_act->ofpacts_len,
+                                  version, &converted_timeout_ofpacts);
+
+    timeout_act->ofpacts = ofpbuf_steal_data(&converted_timeout_ofpacts);
+
+    ofpact_update_len(out, &timeout_act->ofpact);
+    return 0;
+}
+
+char * OVS_WARN_UNUSED_RESULT
+parse_TIMEOUT_ACT(char *arg, struct ofpbuf *ofpacts,
+            enum ofputil_protocol *usable_protocols) 
+{
+    return timeout_act_parse(arg, ofpacts, usable_protocols);
+}
+
+void
+format_TIMEOUT_ACT(const struct ofpact_timeout_act *act, struct ds *s)
+{
+    timeout_act_format(act, s);
+}
 
 static void
 log_bad_action(const struct ofp_action_header *actions, size_t actions_len,
@@ -5751,7 +6044,9 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
     case OFPACT_LEARN:
     case OFPACT_CONJUNCTION:
     case OFPACT_INCREMENT_TABLE_ID:
+    case OFPACT_TIMEOUT_ACT:
     case OFPACT_LEARN_LEARN:
+    case OFPACT_LEARN_DELETE:
     case OFPACT_METER:
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
@@ -5823,7 +6118,9 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
     case OFPACT_LEARN:
     case OFPACT_CONJUNCTION:
     case OFPACT_INCREMENT_TABLE_ID:
+    case OFPACT_TIMEOUT_ACT:
     case OFPACT_LEARN_LEARN:
+    case OFPACT_LEARN_DELETE:
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
     case OFPACT_OUTPUT_REG:
@@ -6042,7 +6339,9 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
     case OFPACT_LEARN:
     case OFPACT_CONJUNCTION:
     case OFPACT_INCREMENT_TABLE_ID:
+    case OFPACT_TIMEOUT_ACT:
     case OFPACT_LEARN_LEARN:
+    case OFPACT_LEARN_DELETE:
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
     case OFPACT_EXIT:
@@ -6586,9 +6885,16 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
     case OFPACT_INCREMENT_TABLE_ID:
         return increment_table_id_check(ofpact_get_INCREMENT_TABLE_ID(a));
 
+    case OFPACT_TIMEOUT_ACT:
+        return timeout_act_check(ofpact_get_TIMEOUT_ACT(a), flow,
+                max_ports, table_id, n_tables, usable_protocols);
+
     case OFPACT_LEARN_LEARN:
-	return learn_learn_check(ofpact_get_LEARN_LEARN(a), flow,
-				 max_ports, table_id, n_tables, usable_protocols);
+        return learn_learn_check(ofpact_get_LEARN_LEARN(a), flow,
+                max_ports, table_id, n_tables, usable_protocols);
+
+    case OFPACT_LEARN_DELETE:
+        return learn_delete_check(ofpact_get_LEARN_DELETE(a), flow);
 
     case OFPACT_MULTIPATH:
         return multipath_check(ofpact_get_MULTIPATH(a), flow);
@@ -7140,7 +7446,9 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_LEARN:
     case OFPACT_CONJUNCTION:
     case OFPACT_INCREMENT_TABLE_ID:
+    case OFPACT_TIMEOUT_ACT:
     case OFPACT_LEARN_LEARN:
+    case OFPACT_LEARN_DELETE:
     case OFPACT_MULTIPATH:
     case OFPACT_NOTE:
     case OFPACT_EXIT:

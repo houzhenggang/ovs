@@ -41,6 +41,7 @@
 #include "ofp-util.h"
 #include "ofpbuf.h"
 #include "ofproto-provider.h"
+#include "ofproto-dpif.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "ovs-rcu.h"
@@ -61,6 +62,10 @@
 #include "unixctl.h"
 #include "openvswitch/vlog.h"
 #include "bundles.h"
+
+#include "increment_table_id.h"
+#include "learn_delete.h"
+#include "learn_learn.h"
 
 VLOG_DEFINE_THIS_MODULE(ofproto);
 
@@ -5227,6 +5232,20 @@ ofproto_rule_expire(struct rule *rule, uint8_t reason)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule_collection rules;
+    struct ofpact *a;
+    struct flow flow;
+
+    // Execute only the timeout_act action (which contains other actions)
+    if (rule->actions && rule->actions->ofpacts_len > 0) {
+        OFPACT_FOR_EACH (a, rule->actions->ofpacts, rule->actions->ofpacts_len) {
+            ovs_mutex_unlock(&ofproto_mutex);
+            if (a->type == OFPACT_TIMEOUT_ACT) {
+                timeout_act_execute(ofpact_get_TIMEOUT_ACT(a), &flow, rule);
+            } 
+            ovs_mutex_trylock(&ofproto_mutex);
+            break;
+        }
+    }
 
     rules.rules = rules.stub;
     rules.n = 1;

@@ -47,6 +47,7 @@ struct ofproto;
 struct shash;
 struct simap;
 struct smap;
+struct rule;
 struct netdev_stats;
 struct ovs_list;
 struct lldp_status;
@@ -521,6 +522,9 @@ int ofproto_port_set_realdev(struct ofproto *, ofp_port_t vlandev_ofp_port,
 
 enum ofputil_table_miss ofproto_table_get_miss_config(const struct ofproto *,
                                                       uint8_t table_id);
+
+//void timeout_act_execute(const struct ofpact_timeout_act *, struct flow *,
+//                         struct rule *);
 
 #ifdef  __cplusplus
 }

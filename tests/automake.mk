@@ -41,6 +41,7 @@ TESTSUITE_AT = \
 	tests/lib.at \
 	tests/learn.at \
 	tests/learn_learn.at \
+	tests/learn_delete.at \
 	tests/increment_table_id.at \
 	tests/vconn.at \
 	tests/file_name.at \

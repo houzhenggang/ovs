@@ -99,6 +99,8 @@
     OFPACT(CONJUNCTION,     ofpact_conjunction, ofpact, "conjunction")  \
     OFPACT(INCREMENT_TABLE_ID,ofpact_increment_table_id, ofpact, "increment_table_id") \
     OFPACT(LEARN_LEARN, ofpact_learn_learn, data, "learn_learn")        \
+    OFPACT(LEARN_DELETE, ofpact_learn_delete, specs, "learn_delete")    \
+    OFPACT(TIMEOUT_ACT, ofpact_timeout_act, ofpacts, "timeout_act")     \
                                                                         \
     /* Arithmetic. */                                                   \
     OFPACT(MULTIPATH,       ofpact_multipath,   ofpact, "multipath")    \
@@ -832,6 +834,30 @@ struct ofpact_learn_learn {
     uint8_t data[];  // Contains the specs data, follows by actions
 };
 
+/* OFPACT_LEARN_DELETE.
+ *
+ * Used for NXAST_RAW_LEARN_DELETE. */
+struct ofpact_learn_delete {
+    struct ofpact ofpact;
+
+    uint16_t priority;          /* Priority level of flow entry. */
+    uint64_t cookie;            /* Cookie for new flow. */
+    enum ofputil_flow_mod_flags flags;
+    uint8_t table_id;           /* Table to insert flow entry. */
+    uint8_t table_spec;         /* See DELETE_USING_..._COOKIE */
+
+    unsigned int n_specs;
+    struct ofpact_learn_spec specs[];
+};
+
+/* OFPACT_TIMEOUT_ACT
+ *
+ * Used for NXAST_RAW_TIMEOUT_ACT. */
+struct ofpact_timeout_act {
+    struct ofpact ofpact;
+    unsigned int ofpacts_len;
+    struct ofpact *ofpacts;
+};
 
 /* Converting OpenFlow to ofpacts. */
 enum ofperr ofpacts_pull_openflow_actions(struct ofpbuf *openflow,

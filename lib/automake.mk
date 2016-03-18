@@ -110,6 +110,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/latch.h \
 	lib/learn.c \
 	lib/learn.h \
+	lib/learn_delete.c \
+	lib/learn_delete.h \
 	lib/learn_learn.c \
 	lib/learn_learn.h \
 	lib/learning-switch.c \
@@ -253,6 +255,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/syslog-provider.h \
 	lib/table.c \
 	lib/table.h \
+    lib/timeout_act.c \
+    lib/timeout_act.h \
 	lib/timer.c \
 	lib/timer.h \
 	lib/timeval.c \

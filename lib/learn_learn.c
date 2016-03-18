@@ -34,6 +34,7 @@
 #include <unistd.h>
 
 #include "increment_table_id.h"
+#include "simon.h"
 
 void
 change_spec_values(struct ofpact_learn_spec *start,
@@ -301,8 +302,6 @@ learn_learn_execute(const struct ofpact_learn_learn *learn,
 			 spec->n_bits);
 	    bitwise_one(&sf->mask, spec->dst.field->n_bytes, spec->dst.ofs,
 			spec->n_bits);
-	    break;
-
 	    break;
 
 	case NX_LEARN_DST_OUTPUT:
