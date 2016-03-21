@@ -4008,7 +4008,17 @@ static void
 xlate_increment_table_id_action(struct xlate_ctx *ctx,
 				const struct ofpact_increment_table_id *incr_table_id) {
 
-    uint8_t table_val = get_table_counter_by_spec(incr_table_id->counter_spec);
+    union user_action_cookie cookie OVS_UNUSED;
+    odp_port_t odp_port OVS_UNUSED;
+    uint32_t pid OVS_UNUSED;
+
+    uint8_t table_val;
+
+    if(!ctx->xin->may_learn) {
+	return;
+    }
+
+    table_val = get_table_counter_by_spec(incr_table_id->counter_spec);
 
     /*
      * Indicate that this action requires per-packet processing so its result cannot
@@ -4019,7 +4029,24 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
      * add another slow path reason.
      */
     //ctx->xout->has_learn = true;
-    ctx->xout->slow = SLOW_CONTROLLER;
+    //ctx->xout->slow = SLOW_ACTION;
+    //xlate_commit_actions(ctx);
+
+#if 0
+    cookie.type = USER_ACTION_COOKIE_SLOW_PATH;
+    cookie.slow_path.unused = 0;
+    cookie.slow_path.reason = SLOW_ACTION;
+
+
+    odp_port = ofp_port_to_odp_port(ctx->xbridge, ctx->xin->flow.in_port.ofp_port);
+    pid = dpif_port_get_pid(ctx->xbridge->dpif, odp_port,
+			    flow_hash_5tuple(&ctx->xin->flow, 0));
+    odp_put_userspace_action(pid, &cookie, sizeof cookie.slow_path,
+			     ODPP_NONE,
+			     false,
+			     ctx->odp_actions);
+
+#endif
 
 #if 0 // TODO:  Add may_increment to xlate_ctx
     /* Don't increment if we're not processing a packet. */
@@ -4047,7 +4074,7 @@ xlate_learn_learn_action(struct xlate_ctx *ctx,
     struct ofpbuf ofpacts;
 
     //ctx->xout->has_learn = true;
-    ctx->xout->slow = SLOW_ACTION;
+    //ctx->xout->slow = SLOW_ACTION;
     learn_learn_mask(learn, ctx->wc);
 
     if (!ctx->xin->may_learn) {

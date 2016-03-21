@@ -1094,13 +1094,28 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
     }
 
     if (!upcall->xout.slow) {
-        ofpbuf_use_const(&upcall->put_actions,
-                         odp_actions->data, odp_actions->size);
+	if(upcall->type == DPIF_UC_MISS) {
+	    ofpbuf_put(&upcall->put_actions,
+		       odp_actions->data, odp_actions->size);
+	    compose_slow_path(udpif, &upcall->xout, upcall->flow,
+			      upcall->flow->in_port.odp_port,
+			      &upcall->put_actions);
+	}
+#if 0
+	ofpbuf_use_const(&upcall->put_actions,
+			 odp_actions->data, odp_actions->size);
+#endif
+
     } else {
         /* upcall->put_actions already initialized by upcall_receive(). */
         compose_slow_path(udpif, &upcall->xout, upcall->flow,
                           upcall->flow->in_port.odp_port,
                           &upcall->put_actions);
+    }
+
+    // If the datapath has already processed our actions, kill them
+    if(upcall->type == DPIF_UC_ACTION) {
+	odp_actions->size = 0;
     }
 
     /* This function is also called for slow-pathed flows.  As we are only
