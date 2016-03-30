@@ -1128,10 +1128,38 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
                           &upcall->put_actions);
     }
 
-    // If the datapath has already processed our actions, kill them
-    // The alternative to doing this is iterating over odp_actions
+    /* If we are receiving an upcall that was created by a duplicate
+     *  action, its actions have already been handled by the datapath,
+     *  so kill them.  For all other slow path types, the actions
+     *  should be executed as given.  */
     if(upcall->type == DPIF_UC_ACTION) {
-	odp_actions->size = 0;
+
+	/* Get the slow path type from the userdata attribute, if it
+	 * exists. */
+	const uint8_t *userdata = nl_attr_get(upcall->userdata);
+	size_t userdata_len = nl_attr_get_size(upcall->userdata);
+	union user_action_cookie cookie;
+
+	if((userdata_len >= sizeof(cookie.type)) &&
+	   (userdata_len <= sizeof(cookie))) {
+
+	    memset(&cookie, 0, sizeof(cookie));
+	    memcpy(&cookie, userdata, userdata_len);
+
+	    if((userdata_len == sizeof(cookie.slow_path)) &&
+	       (cookie.type == USER_ACTION_COOKIE_SLOW_PATH)) {
+
+		if(cookie.slow_path.reason == SLOW_DUP) {
+		    /* Kill the actions clearing the size of the
+		     * ofpbuf, preventing anything from using
+		     * odp_actions.  ofpbuf_uninit doesn't consider
+		     * the size when freeing the associated pointers,
+		     * so the data is still deallocated. */
+		    odp_actions->size = 0;
+		}
+	    }
+
+	}
     }
 
     /* This function is also called for slow-pathed flows.  As we are only
