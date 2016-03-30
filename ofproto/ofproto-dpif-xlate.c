@@ -4027,7 +4027,7 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
     //ctx->xout->has_learn = true;
     //ctx->xout->slow = SLOW_ACTION;
     //xlate_commit_actions(ctx);
-
+    ctx->xout->slow = SLOW_DUP;
 
 #if 0 // TODO:  Add may_increment to xlate_ctx
     /* Don't increment if we're not processing a packet. */
@@ -4055,12 +4055,11 @@ xlate_learn_learn_action(struct xlate_ctx *ctx,
     struct ofpbuf ofpacts;
 
     learn_learn_mask(learn, ctx->wc);
+    ctx->xout->slow = SLOW_DUP;
 
     if (!ctx->xin->may_learn) {
         return;
     }
-
-    //ctx->xout->slow = SLOW_ACTION;
 
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     learn_learn_execute(learn, &ctx->xin->flow, &fm, &ofpacts,

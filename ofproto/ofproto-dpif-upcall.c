@@ -1101,8 +1101,15 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
     }
 
     if (!upcall->xout.slow) {
-	if(upcall->type == DPIF_UC_MISS) {
-	    VLOG_INFO_RL(&rl, "Creating fast-path actions for 0x%"PRIx64"%"PRIx64,
+	VLOG_INFO_RL(&rl, "Creating fast-path actions for 0x%"PRIx64"%"PRIx64,
+		     upcall->ufid->u64.hi, upcall->ufid->u64.lo);
+
+	ofpbuf_use_const(&upcall->put_actions,
+			 odp_actions->data, odp_actions->size);
+    }
+    else if (((upcall->type == DPIF_UC_MISS) &&
+	      (upcall->xout.slow == SLOW_DUP))) { // Exclude other slow types
+	    VLOG_INFO_RL(&rl, "Creating dup-path actions for 0x%"PRIx64"%"PRIx64,
 			 upcall->ufid->u64.hi, upcall->ufid->u64.lo);
 
 	    ofpbuf_put(&upcall->put_actions,
@@ -1110,16 +1117,10 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
 	    compose_slow_path(udpif, &upcall->xout, upcall->flow,
 			      upcall->flow->in_port.odp_port,
 			      &upcall->put_actions);
-	}
-#if 0
-	ofpbuf_use_const(&upcall->put_actions,
-			 odp_actions->data, odp_actions->size);
-#endif
-
-    } else {
+    }
+    else {
 	VLOG_INFO_RL(&rl, "Creating slow-path actions for 0x%"PRIx64"%"PRIx64,
 		     upcall->ufid->u64.hi, upcall->ufid->u64.lo);
-
 
         /* upcall->put_actions already initialized by upcall_receive(). */
         compose_slow_path(udpif, &upcall->xout, upcall->flow,
@@ -1128,6 +1129,7 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
     }
 
     // If the datapath has already processed our actions, kill them
+    // The alternative to doing this is iterating over odp_actions
     if(upcall->type == DPIF_UC_ACTION) {
 	odp_actions->size = 0;
     }
@@ -1901,11 +1903,12 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
     }
 
     if (xout.slow) {
-        ofpbuf_clear(odp_actions);
-        compose_slow_path(udpif, &xout, &flow, flow.in_port.odp_port,
-                          odp_actions);
-    } else {
-	/* For now, always add a userspace action. */
+	/* Unless this flow is a duplicate, the only action
+	 * for this ukey should be the slow path action. */
+	if(!(xout.slow == SLOW_DUP)) {
+	    ofpbuf_clear(odp_actions);
+	}
+
         compose_slow_path(udpif, &xout, &flow, flow.in_port.odp_port,
                           odp_actions);
     }
