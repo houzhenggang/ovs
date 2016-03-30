@@ -136,8 +136,8 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(3),eth(src=11:22:33:44:55:66,dst=99:88:77:66:55:44)" -generate], [0], [stdout])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "in_port(3),eth(src=11:22:33:44:55:66,dst=99:88:77:66:55:44)" -generate], [0], [stdout])
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0],
-[[ priority=0 actions=learn_learn(table=150,priority=2,actions=learn_delete(table=2,NXM_OF_ETH_DST[](defer=0)),)
- priority=2 actions=learn_delete(table=152,eth_dst=99:88:77:66:55:44)
+[[ priority=0 actions=learn_learn(table=0,priority=2,actions=learn_delete(table=2,NXM_OF_ETH_DST[](defer=0)),)
+ priority=2 actions=learn_delete(table=2,eth_dst=99:88:77:66:55:44)
 NXST_FLOW reply:
 ]])
 OVS_VSWITCHD_STOP

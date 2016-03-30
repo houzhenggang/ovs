@@ -127,15 +127,12 @@ void do_deferral(struct ofpact *ofpacts, uint32_t ofpacts_len,
 	if (a->type == OFPACT_LEARN_LEARN) {
 	    populate_deferral_values(ofpact_get_LEARN_LEARN(a), flow);
 	}
-// TODO:  Test after adding support for learn_delete
-#ifdef OFPACT_LEARN_DELETE
 	else if (a->type == OFPACT_LEARN_DELETE) {
 	    struct ofpact_learn_delete *del;
 
 	    del = ofpact_get_LEARN_DELETE(a);
 	    change_spec_values(del->specs, &del->specs[del->n_specs], flow);
 	}
-#endif
     }
 }
 
