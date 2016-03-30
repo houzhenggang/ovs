@@ -129,6 +129,7 @@ void learn_delete_execute(const struct ofpact_learn_delete *learn,
     }
     fm->buffer_id = UINT32_MAX;
     fm->out_port = OFPP_NONE;
+    fm->out_group = OFPG_ANY;
     fm->flags = learn->flags;
     fm->ofpacts = NULL;
     fm->ofpacts_len = 0;
