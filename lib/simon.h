@@ -3,6 +3,10 @@
 
 #include "openflow/openflow-1.0.h"
 
+#define SIMON_TABLE_INGRESS (1)
+#define SIMON_TABLE_PRODUCTION (2)
+#define SIMON_TABLE_EGRESS (3)
+
 // Table processing stages
 #define SIMON_TABLE_INGRESS_START (0)
 #define SIMON_TABLE_PRODUCTION_START (150)
