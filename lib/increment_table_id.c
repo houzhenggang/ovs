@@ -119,15 +119,14 @@ increment_table_id_execute(const struct ofpact_increment_table_id *incr_table_id
 vtable_id get_table_counter_by_id(vtable_id table_id)
 {
     vtable_id counter_val = 0;
-
     if(TABLE_IS_INGRESS(table_id)) {
 	counter_val = increment_table_counter(TABLE_SPEC_INGRESS, 0);
 
-	ovs_assert(counter_val < SIMON_TABLE_PRODUCTION_START);
+	//ovs_assert(counter_val < SIMON_TABLE_PRODUCTION_START);
     } else if(TABLE_IS_EGRESS(table_id)) {
 	counter_val = increment_table_counter(TABLE_SPEC_EGRESS, 0);
 
-	ovs_assert(counter_val < SIMON_TABLE_RESERVED_START);
+	//ovs_assert(counter_val < SIMON_TABLE_RESERVED_START);
     } else {
 	VLOG_WARN("Attempting to get counter table id with unknown spec:  %"PRIvtable, table_id);
     }
@@ -138,7 +137,7 @@ vtable_id get_table_counter_by_id(vtable_id table_id)
 vtable_id get_table_counter_by_spec(vtable_id table_spec)
 {
     vtable_id val =  increment_table_counter(table_spec, 0);
-    ovs_assert(val < (table_spec == TABLE_SPEC_INGRESS ? SIMON_TABLE_PRODUCTION_START : SIMON_TABLE_RESERVED_START));
+    //ovs_assert(val < (table_spec == TABLE_SPEC_INGRESS ? SIMON_TABLE_PRODUCTION_START : SIMON_TABLE_RESERVED_START));
 
     return val;
 }

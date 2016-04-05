@@ -72,6 +72,8 @@
 #include "vlan-bitmap.h"
 #include "openvswitch/vlog.h"
 
+#include "simon.h"
+
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif);
 
 COVERAGE_DEFINE(ofproto_dpif_expired);
@@ -1390,6 +1392,7 @@ static int
 add_internal_flows(struct ofproto_dpif *ofproto)
 {
     struct ofpact_controller *controller;
+    //struct ofpact_resubmit *resubmit;
     uint64_t ofpacts_stub[128 / 8];
     struct ofpbuf ofpacts;
     struct rule *unused_rulep OVS_UNUSED;
@@ -1405,6 +1408,11 @@ add_internal_flows(struct ofproto_dpif *ofproto)
     controller->controller_id = 0;
     controller->reason = OFPR_NO_MATCH;
     ofpact_pad(&ofpacts);
+#if 0
+    resubmit = ofpact_put_RESUBMIT(&ofpacts);
+    resubmit->table_id = SIMON_TABLE_INGRESS;
+    resubmit->in_port = OFPP_IN_PORT;
+#endif
 
     error = add_internal_miss_flow(ofproto, id++, &ofpacts,
                                    &ofproto->miss_rule);

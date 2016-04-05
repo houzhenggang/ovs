@@ -71,7 +71,7 @@ VLOG_DEFINE_THIS_MODULE(ofproto_dpif_xlate);
 
 /* Maximum depth of flow table recursion (due to resubmit actions) in a
  * flow translation. */
-#define MAX_RESUBMIT_RECURSION 64
+#define MAX_RESUBMIT_RECURSION 256
 #define MAX_INTERNAL_RESUBMITS 1   /* Max resbmits allowed using rules in
                                       internal table. */
 
@@ -212,6 +212,9 @@ struct xlate_ctx {
     ofp_port_t nf_output_iface; /* Output interface index for NetFlow. */
     bool exit;                  /* No further actions should be processed. */
     mirror_mask_t mirrors;      /* Bitmap of associated mirrors. */
+
+    uint64_t orig_ingress_id;   /* Ingress table counter at start of auto-resubmit. */
+    uint64_t orig_egress_id;    /* Egress table counter at start of auto-resubmit. */
 
    /* These are used for non-bond recirculation.  The recirculation IDs are
     * stored in xout and must be associated with a datapath flow (ukey),
@@ -3249,16 +3252,33 @@ static void
 xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
                    bool may_packet_in, bool honor_table_miss)
 {
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 20);
+
     /* Check if we need to recirculate before matching in a table. */
     if (ctx->was_mpls) {
         ctx_trigger_recirculation(ctx);
         return;
     }
+
     if (xlate_resubmit_resource_check(ctx)) {
         uint8_t old_table_id = ctx->table_id;
         struct rule_dpif *rule;
+	vtable_id counter_val;
 
         ctx->table_id = table_id;
+
+	counter_val = get_table_counter_by_spec(TABLE_SPEC_INGRESS);
+
+	if(TABLE_IS_INGRESS(table_id)) {
+	    if(old_table_id == 0) {
+		ctx->orig_ingress_id = counter_val;
+	    }
+	    ctx->xin->flow.metadata = (old_table_id == 0) ? 0 :
+		htonll(ntohll(ctx->xin->flow.metadata) + 1);
+	}
+
+	VLOG_WARN_RL(&rl, "Matching on table:  %"PRIu8", in_port:  %"PRIx16", counter:  %"PRIvtable", vid:  %"PRIu64,
+		     table_id, in_port, counter_val, ntohll(ctx->xin->flow.metadata));
 
         rule = rule_dpif_lookup_from_table(ctx->xbridge->ofproto,
                                            ctx->tables_version,
@@ -3285,6 +3305,19 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
             }
             xlate_recursively(ctx, rule);
         }
+
+	/* Automatic resubmit: perform xlate_table_action again if we
+	 * still have metadata values to check */
+	if(TABLE_IS_INGRESS(table_id)) {
+	    //counter_val = get_table_counter_by_id(table_id);
+	    if(ntohll(ctx->xin->flow.metadata) < ctx->orig_ingress_id) {
+		xlate_table_action(ctx, in_port, table_id,
+				   may_packet_in, honor_table_miss);
+	    } else {
+		xlate_table_action(ctx, in_port, SIMON_TABLE_PRODUCTION,
+				   may_packet_in, honor_table_miss);
+	    }
+	}
 
         ctx->table_id = old_table_id;
         return;
@@ -5133,6 +5166,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .error = XLATE_OK,
         .mirrors = 0,
 
+	.orig_ingress_id = 0,
+	.orig_egress_id = 0,
+
         .recirc_action_offset = -1,
         .last_unroll_offset = -1,
 
@@ -5265,6 +5301,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     ctx.tables_version = ofproto_dpif_get_tables_version(ctx.xbridge->ofproto);
 
     if (!xin->ofpacts && !ctx.rule) {
+	/* ***** Try to find a match in this table ***** */
         ctx.rule = rule_dpif_lookup_from_table(
             ctx.xbridge->ofproto, ctx.tables_version, flow, xin->wc,
             ctx.xin->resubmit_stats, &ctx.table_id,

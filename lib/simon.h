@@ -13,9 +13,10 @@
 #define SIMON_TABLE_EGRESS_START (200)
 #define SIMON_TABLE_RESERVED_START (254) // Last table is reserved for OVS
 
-#define SIMON_TABLE_INC_WARN_INTERVAL (20) // Warn on usage of every N tables
+#define SIMON_TABLE_INC_WARN_INTERVAL (10000) // Warn on usage of every N tables
 
 // Convenience macros for identifying table ranges
+#if 0
 /* #define TABLE_IS_INGRESS(id) ((id >= SIMON_TABLE_INGRESS_START) && \ */
 /* 			      (id < SIMON_TABLE_PRODUCTION_START)) */
 #define TABLE_IS_INGRESS(id) ((id < SIMON_TABLE_PRODUCTION_START))
@@ -25,7 +26,12 @@
 
 #define TABLE_IS_EGRESS(id) ((id >= SIMON_TABLE_EGRESS_START) && \
 			     (id < 254))
+#endif
 
+
+#define TABLE_IS_INGRESS(id)    ((id == SIMON_TABLE_INGRESS))
+#define TABLE_ID_PRODUCTION(id) ((id == SIMON_TABLE_PRODUCTION))
+#define TABLE_IS_EGRESS(id)     ((id == SIMON_TABLE_EGRESS))
 
 #define SIMON_USE_OF_OUTPUT_EGRESS 1
 
