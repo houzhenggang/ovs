@@ -1035,7 +1035,7 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
     struct dpif_flow_stats stats;
     struct xlate_in xin;
 
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 20);
+    static struct vlog_rate_limit rl OVS_UNUSED = VLOG_RATE_LIMIT_INIT(20, 20);
 
     stats.n_packets = 1;
     stats.n_bytes = dp_packet_size(upcall->packet);
@@ -1044,12 +1044,12 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
 
     xlate_in_init(&xin, upcall->ofproto, upcall->flow, upcall->in_port, NULL,
                   stats.tcp_flags, upcall->packet, wc, odp_actions);
-
+#if 0
     VLOG_INFO_RL(&rl, "Handling upcall of type %s from 0x%"PRIx64"%"PRIx64,
 		 (upcall->type == DPIF_UC_MISS) ? "  MISS" :
 		 (upcall->type == DPIF_UC_ACTION) ? "ACTION" : " OTHER",
 		 upcall->ufid->u64.hi, upcall->ufid->u64.lo);
-
+#endif
     if (upcall->type == DPIF_UC_MISS) {
         xin.resubmit_stats = &stats;
 
@@ -1101,17 +1101,19 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
     }
 
     if (!upcall->xout.slow) {
+#if 0
 	VLOG_INFO_RL(&rl, "Creating fast-path actions for 0x%"PRIx64"%"PRIx64,
 		     upcall->ufid->u64.hi, upcall->ufid->u64.lo);
-
+#endif
 	ofpbuf_use_const(&upcall->put_actions,
 			 odp_actions->data, odp_actions->size);
     }
     else if (((upcall->type == DPIF_UC_MISS) &&
 	      (upcall->xout.slow == SLOW_DUP))) { // Exclude other slow types
+#if 0
 	    VLOG_INFO_RL(&rl, "Creating dup-path actions for 0x%"PRIx64"%"PRIx64,
 			 upcall->ufid->u64.hi, upcall->ufid->u64.lo);
-
+#endif
 	    ofpbuf_put(&upcall->put_actions,
 		       odp_actions->data, odp_actions->size);
 	    compose_slow_path(udpif, &upcall->xout, upcall->flow,
@@ -1119,8 +1121,11 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
 			      &upcall->put_actions);
     }
     else {
-	VLOG_INFO_RL(&rl, "Creating slow-path actions for 0x%"PRIx64"%"PRIx64,
-		     upcall->ufid->u64.hi, upcall->ufid->u64.lo);
+	if(upcall->xout.slow != SLOW_DUP) {
+	    VLOG_INFO_RL(&rl, "Creating %s-path actions for 0x%"PRIx64"%"PRIx64,
+			 (upcall->xout.slow == SLOW_DUP) ? "dup" : "slow",
+			 upcall->ufid->u64.hi, upcall->ufid->u64.lo);
+	}
 
         /* upcall->put_actions already initialized by upcall_receive(). */
         compose_slow_path(udpif, &upcall->xout, upcall->flow,
@@ -1156,6 +1161,10 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
 		     * the size when freeing the associated pointers,
 		     * so the data is still deallocated. */
 		    odp_actions->size = 0;
+		} else {
+		    VLOG_WARN_RL(&rl, "Not killing slow actions for 0x%"PRIx64"%"PRIx64,
+				 upcall->ufid->u64.hi, upcall->ufid->u64.lo);
+
 		}
 	    }
 

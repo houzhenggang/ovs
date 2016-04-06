@@ -213,9 +213,6 @@ struct xlate_ctx {
     bool exit;                  /* No further actions should be processed. */
     mirror_mask_t mirrors;      /* Bitmap of associated mirrors. */
 
-    uint64_t orig_ingress_id;   /* Ingress table counter at start of auto-resubmit. */
-    uint64_t orig_egress_id;    /* Egress table counter at start of auto-resubmit. */
-
    /* These are used for non-bond recirculation.  The recirculation IDs are
     * stored in xout and must be associated with a datapath flow (ukey),
     * otherwise they will be freed when the xout is uninitialized.
@@ -3305,7 +3302,6 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
     }
 }
 
-//	 (((ntohll((MD)) == 0)) || (ntohll((MD)) < (MAX_MD)));
 #define FOR_EACH_VTABLE(MD, MAX_MD)                             \
     for ((MD) = 0;                                              \
 	 (ntohll((MD)) <= (MAX_MD));				\
@@ -3315,7 +3311,7 @@ static void
 xlate_table_simon(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 		  bool may_packet_in, bool honor_table_miss)
 {
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 20);
+    static struct vlog_rate_limit rl OVS_UNUSED = VLOG_RATE_LIMIT_INIT(20, 20);
 
     /* Check if we need to recirculate before matching in a table. */
     if (ctx->was_mpls) {
@@ -3331,17 +3327,13 @@ xlate_table_simon(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
         ctx->table_id = table_id;
 
 	counter_val = get_table_counter_by_spec(TABLE_SPEC_INGRESS);
-	if(TABLE_IS_INGRESS(table_id)) {
-	    if(old_table_id == 0) {
-		ctx->orig_ingress_id = counter_val;
-	    }
-	}
 
 	FOR_EACH_VTABLE(ctx->xin->flow.metadata, counter_val)
 	{
+#if 0
 	    VLOG_WARN_RL(&rl, "Matching on table:  %"PRIu8", in_port:  %"PRIx16", counter:  %"PRIvtable", vid:  %"PRIu64,
 			 table_id, in_port, counter_val, ntohll(ctx->xin->flow.metadata));
-
+#endif
 	    rule = rule_dpif_lookup_from_table(ctx->xbridge->ofproto,
 					       ctx->tables_version,
 					       &ctx->xin->flow, ctx->xin->wc,
@@ -5223,9 +5215,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .exit = false,
         .error = XLATE_OK,
         .mirrors = 0,
-
-	.orig_ingress_id = 0,
-	.orig_egress_id = 0,
 
         .recirc_action_offset = -1,
         .last_unroll_offset = -1,
