@@ -3247,10 +3247,15 @@ xlate_resubmit_resource_check(struct xlate_ctx *ctx)
 
     return false;
 }
+//	 (((ntohll((MD)) == 0)) || (ntohll((MD)) < (MAX_MD)));
+#define FOR_EACH_VTABLE(MD, MAX_MD)                             \
+    for ((MD) = 0;                                              \
+	 (ntohll((MD)) <= (MAX_MD));				\
+	 (MD) = htonll(ntohll((MD)) + 1))
 
 static void
-xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
-                   bool may_packet_in, bool honor_table_miss)
+xlate_table_simon(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
+		  bool may_packet_in, bool honor_table_miss)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 20);
 
@@ -3268,6 +3273,83 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
         ctx->table_id = table_id;
 
 	counter_val = get_table_counter_by_spec(TABLE_SPEC_INGRESS);
+	if(TABLE_IS_INGRESS(table_id)) {
+	    if(old_table_id == 0) {
+		ctx->orig_ingress_id = counter_val;
+	    }
+	}
+
+	FOR_EACH_VTABLE(ctx->xin->flow.metadata, counter_val)
+	{
+	    VLOG_WARN_RL(&rl, "Matching on table:  %"PRIu8", in_port:  %"PRIx16", counter:  %"PRIvtable", vid:  %"PRIu64,
+			 table_id, in_port, counter_val, ntohll(ctx->xin->flow.metadata));
+
+	    rule = rule_dpif_lookup_from_table(ctx->xbridge->ofproto,
+					       ctx->tables_version,
+					       &ctx->xin->flow, ctx->xin->wc,
+					       ctx->xin->resubmit_stats,
+					       &ctx->table_id, in_port,
+					       may_packet_in, honor_table_miss);
+
+	    if (OVS_UNLIKELY(ctx->xin->resubmit_hook)) {
+		ctx->xin->resubmit_hook(ctx->xin, rule, ctx->recurse + 1);
+	    }
+
+	    if (rule) {
+		/* Fill in the cache entry here instead of xlate_recursively
+		 * to make the reference counting more explicit.  We take a
+		 * reference in the lookups above if we are going to cache the
+		 * rule. */
+		if (ctx->xin->xcache) {
+		    struct xc_entry *entry;
+
+		    entry = xlate_cache_add_entry(ctx->xin->xcache, XC_RULE);
+		    entry->u.rule = rule;
+		    rule_dpif_ref(rule);
+		}
+		xlate_recursively(ctx, rule);
+	    }
+	}
+
+
+	/* If we just finished the ingress tables, automatically resubmit to production. */
+	if(TABLE_IS_INGRESS(table_id)) {
+	    xlate_table_action(ctx, in_port, SIMON_TABLE_PRODUCTION,
+			       may_packet_in, honor_table_miss);
+	}
+
+        ctx->table_id = old_table_id;
+        return;
+    }
+}
+
+static void
+xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
+                   bool may_packet_in, bool honor_table_miss)
+{
+    //static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 20);
+
+    /* Check if we need to recirculate before matching in a table. */
+    if (ctx->was_mpls) {
+        ctx_trigger_recirculation(ctx);
+        return;
+    }
+
+    if((TABLE_IS_INGRESS(table_id)) ||
+       (TABLE_IS_EGRESS(table_id))) {
+	xlate_table_simon(ctx, in_port, table_id,
+			  may_packet_in, honor_table_miss);
+	return;
+    }
+
+    if (xlate_resubmit_resource_check(ctx)) {
+        uint8_t old_table_id = ctx->table_id;
+        struct rule_dpif *rule;
+	//vtable_id counter_val;
+
+        ctx->table_id = table_id;
+#if 0
+	counter_val = get_table_counter_by_spec(TABLE_SPEC_INGRESS);
 
 	if(TABLE_IS_INGRESS(table_id)) {
 	    if(old_table_id == 0) {
@@ -3279,7 +3361,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 
 	VLOG_WARN_RL(&rl, "Matching on table:  %"PRIu8", in_port:  %"PRIx16", counter:  %"PRIvtable", vid:  %"PRIu64,
 		     table_id, in_port, counter_val, ntohll(ctx->xin->flow.metadata));
-
+#endif
         rule = rule_dpif_lookup_from_table(ctx->xbridge->ofproto,
                                            ctx->tables_version,
                                            &ctx->xin->flow, ctx->xin->wc,
@@ -3305,7 +3387,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
             }
             xlate_recursively(ctx, rule);
         }
-
+#if 0
 	/* Automatic resubmit: perform xlate_table_action again if we
 	 * still have metadata values to check */
 	if(TABLE_IS_INGRESS(table_id)) {
@@ -3318,7 +3400,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 				   may_packet_in, honor_table_miss);
 	    }
 	}
-
+#endif
         ctx->table_id = old_table_id;
         return;
     }
