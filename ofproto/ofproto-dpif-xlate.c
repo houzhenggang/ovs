@@ -3297,6 +3297,13 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
             xlate_recursively(ctx, rule);
         }
 
+	/* If we just processed the production table, automatically
+	 * submit to the egress table. */
+	if(TABLE_IS_PRODUCTION(table_id)) {
+	    xlate_table_action(ctx, in_port, SIMON_TABLE_EGRESS,
+			       may_packet_in, honor_table_miss);
+	}
+
         ctx->table_id = old_table_id;
         return;
     }
@@ -3319,6 +3326,15 @@ xlate_table_simon(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
         return;
     }
 
+    if ((!TABLE_IS_INGRESS(table_id)) &&
+	(!TABLE_IS_EGRESS(table_id))) {
+
+	VLOG_WARN_RL(&rl, "Attempting to perform simon translation for invalid table:  %"PRIu8,
+		     table_id);
+
+	return;
+    }
+
     if (xlate_resubmit_resource_check(ctx)) {
         uint8_t old_table_id = ctx->table_id;
         struct rule_dpif *rule;
@@ -3326,7 +3342,7 @@ xlate_table_simon(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 
         ctx->table_id = table_id;
 
-	counter_val = get_table_counter_by_spec(TABLE_SPEC_INGRESS);
+	counter_val = get_table_counter_by_id(table_id);
 
 	FOR_EACH_VTABLE(ctx->xin->flow.metadata, counter_val)
 	{
