@@ -213,6 +213,9 @@ struct xlate_ctx {
     bool exit;                  /* No further actions should be processed. */
     mirror_mask_t mirrors;      /* Bitmap of associated mirrors. */
 
+    uint32_t shadow_regs[FLOW_N_REGS]; /* Saved simon registers during
+					* production translation. */
+
    /* These are used for non-bond recirculation.  The recirculation IDs are
     * stored in xout and must be associated with a datapath flow (ukey),
     * otherwise they will be freed when the xout is uninitialized.
@@ -3266,6 +3269,14 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 	return;
     }
 
+    /* If we are starting production processing, save the register
+     * state. */
+    if(TABLE_IS_PRODUCTION(table_id)) {
+	memcpy(ctx->shadow_regs, ctx->xin->flow.regs,
+	       sizeof(ctx->xin->flow.regs));
+	memset(ctx->xin->flow.regs, 0, sizeof(ctx->xin->flow.regs));
+    }
+
     if (xlate_resubmit_resource_check(ctx)) {
         uint8_t old_table_id = ctx->table_id;
         struct rule_dpif *rule;
@@ -3300,6 +3311,11 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 	/* If we just processed the production table, automatically
 	 * submit to the egress table. */
 	if(TABLE_IS_PRODUCTION(table_id)) {
+
+	    /* Restore the register state. */
+	    memcpy(ctx->xin->flow.regs, ctx->shadow_regs,
+		   sizeof(ctx->xin->flow.regs));
+
 	    xlate_table_action(ctx, in_port, SIMON_TABLE_EGRESS,
 			       may_packet_in, honor_table_miss);
 	}
@@ -3355,7 +3371,7 @@ xlate_table_simon(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 					       &ctx->xin->flow, ctx->xin->wc,
 					       ctx->xin->resubmit_stats,
 					       &ctx->table_id, in_port,
-					       may_packet_in, honor_table_miss);
+					       false, false);
 
 	    if (OVS_UNLIKELY(ctx->xin->resubmit_hook)) {
 		ctx->xin->resubmit_hook(ctx->xin, rule, ctx->recurse + 1);
