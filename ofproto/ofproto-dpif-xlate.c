@@ -4176,6 +4176,12 @@ xlate_learn_learn_action(struct xlate_ctx *ctx,
         return;
     }
 
+#if 0
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 20);
+    VLOG_WARN_RL(&rl, "Executing learn_learn for flow:  tcp_flags:  0x%"PRIx16,
+		 ntohs(ctx->xin->flow.tcp_flags) & 0x0fff);
+#endif
+
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     learn_learn_execute(learn, &ctx->xin->flow, &fm, &ofpacts,
 			ctx->table_id);

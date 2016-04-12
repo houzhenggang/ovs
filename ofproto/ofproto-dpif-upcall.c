@@ -242,6 +242,8 @@ struct udpif_key {
     uint32_t hash;                 /* Pre-computed hash for 'key'. */
     unsigned pmd_id;               /* Datapath poll mode driver id. */
 
+    bool for_simon;                /* ukey is for simon processing. */
+
     struct ovs_mutex mutex;                   /* Guards the following. */
     struct dpif_flow_stats stats OVS_GUARDED; /* Last known stats.*/
     long long int created OVS_GUARDED;        /* Estimate of creation time. */
@@ -1176,6 +1178,11 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
      * no point in creating a ukey otherwise. */
     if (upcall->type == DPIF_UC_MISS) {
         upcall->ukey = ukey_create_from_upcall(upcall, wc);
+#if 0
+	if(upcall->xout.slow == SLOW_DUP) {
+	    upcall->ukey->for_simon = true;
+	}
+#endif
     }
 }
 
@@ -1510,7 +1517,8 @@ ukey_set_actions(struct udpif_key *ukey, const struct ofpbuf *actions)
 static struct udpif_key *
 ukey_create__(const struct nlattr *key, size_t key_len,
               const struct nlattr *mask, size_t mask_len,
-              bool ufid_present, const ovs_u128 *ufid,
+              bool ufid_present, bool for_simon,
+	      const ovs_u128 *ufid,
               const unsigned pmd_id, const struct ofpbuf *actions,
               uint64_t dump_seq, uint64_t reval_seq, long long int used,
               uint32_t key_recirc_id, struct xlate_out *xout)
@@ -1528,6 +1536,7 @@ ukey_create__(const struct nlattr *key, size_t key_len,
     ukey->ufid = *ufid;
     ukey->pmd_id = pmd_id;
     ukey->hash = get_ufid_hash(&ukey->ufid);
+    ukey->for_simon = for_simon;
 
     ovsrcu_init(&ukey->actions, NULL);
     ukey_set_actions(ukey, actions);
@@ -1583,7 +1592,8 @@ ukey_create_from_upcall(struct upcall *upcall, struct flow_wildcards *wc)
     }
 
     return ukey_create__(keybuf.data, keybuf.size, maskbuf.data, maskbuf.size,
-                         true, upcall->ufid, upcall->pmd_id,
+                         true, ((upcall->xout.slow & SLOW_DUP) != 0),
+			 upcall->ufid, upcall->pmd_id,
                          &upcall->put_actions, upcall->dump_seq,
                          upcall->reval_seq, 0,
                          upcall->have_recirc_ref ? upcall->recirc->id : 0,
@@ -1637,7 +1647,7 @@ ukey_create_from_dpif_flow(const struct udpif *udpif,
     reval_seq = seq_read(udpif->reval_seq);
     ofpbuf_use_const(&actions, &flow->actions, flow->actions_len);
     *ukey = ukey_create__(flow->key, flow->key_len,
-                          flow->mask, flow->mask_len, flow->ufid_present,
+                          flow->mask, flow->mask_len, flow->ufid_present, false,
                           &flow->ufid, flow->pmd_id, &actions, dump_seq,
                           reval_seq, flow->stats.used, 0, NULL);
 
@@ -1926,7 +1936,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
 
     xlate_in_init(&xin, ofproto, &flow, ofp_in_port, NULL, push.tcp_flags,
                   NULL, need_revalidate ? &wc : NULL, odp_actions);
-    if (push.n_packets) {
+    if ((push.n_packets) && (!ukey->for_simon)) {
         xin.resubmit_stats = &push;
         xin.may_learn = true;
     }
