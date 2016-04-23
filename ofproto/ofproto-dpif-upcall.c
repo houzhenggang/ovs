@@ -1124,9 +1124,10 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
     }
     else {
 	if(upcall->xout.slow != SLOW_DUP) {
-	    VLOG_INFO_RL(&rl, "Creating %s-path actions for 0x%"PRIx64"%"PRIx64,
+	    VLOG_INFO_RL(&rl, "Creating %s-path actions for 0x%"PRIx64"%"PRIx64"  slow:  0x%"PRIx8,
 			 (upcall->xout.slow == SLOW_DUP) ? "dup" : "slow",
-			 upcall->ufid->u64.hi, upcall->ufid->u64.lo);
+			 upcall->ufid->u64.hi, upcall->ufid->u64.lo,
+			 (uint8_t)(upcall->xout.slow));
 	}
 
         /* upcall->put_actions already initialized by upcall_receive(). */

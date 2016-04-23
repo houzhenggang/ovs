@@ -3360,6 +3360,7 @@ xlate_table_simon(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 
 	counter_val = get_table_counter_by_id(table_id);
 
+	//FOR_EACH_VTABLE(ctx->xin->flow.metadata, 0)
 	FOR_EACH_VTABLE(ctx->xin->flow.metadata, counter_val)
 	{
 #if 0
@@ -4125,6 +4126,8 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
 
     uint8_t table_val;
 
+    ctx->xout->slow = SLOW_DUP;
+
     if(!ctx->xin->may_learn) {
 	return;
     }
@@ -4142,7 +4145,7 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
     //ctx->xout->has_learn = true;
     //ctx->xout->slow = SLOW_ACTION;
     //xlate_commit_actions(ctx);
-    ctx->xout->slow = SLOW_DUP;
+
 
 #if 0 // TODO:  Add may_increment to xlate_ctx
     /* Don't increment if we're not processing a packet. */
@@ -4157,7 +4160,10 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
 	     table_val,
 	     ctx->xin->flow.nw_src,
 	     ctx->recurse);
-    increment_table_id_execute(incr_table_id);
+
+    if(incr_table_id->counter_spec == TABLE_SPEC_INGRESS) {
+	increment_table_id_execute(incr_table_id);
+    }
 }
 
 static void
@@ -4181,12 +4187,13 @@ xlate_learn_learn_action(struct xlate_ctx *ctx,
     VLOG_WARN_RL(&rl, "Executing learn_learn for flow:  tcp_flags:  0x%"PRIx16,
 		 ntohs(ctx->xin->flow.tcp_flags) & 0x0fff);
 #endif
-
+#if 1
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     learn_learn_execute(learn, &ctx->xin->flow, &fm, &ofpacts,
 			ctx->table_id);
     ofproto_dpif_flow_mod(ctx->xbridge->ofproto, &fm);
     ofpbuf_uninit(&ofpacts);
+#endif
 }
 
 

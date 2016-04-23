@@ -66,18 +66,20 @@ increment_table_counter(vtable_id counter_spec, vtable_id inc)
 {
     vtable_id orig = 0;
 
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
+
     switch(counter_spec)
     {
     case TABLE_SPEC_INGRESS:
 	atomic_add(&atomic_table_id_ingress, inc, &orig);
 
 	if(inc != 0) {
-	    VLOG_DBG("Incrementing ingress table id from:  %"PRIvtable ", inc:  %"PRIvtable, orig, inc);
+	    VLOG_DBG_RL(&rl, "Incrementing ingress table id from:  %"PRIvtable ", inc:  %"PRIvtable, orig, inc);
 	}
 
 	if((inc != 0) && (orig != 0) && ((orig % SIMON_TABLE_INC_WARN_INTERVAL) == 0)) {
-	    VLOG_WARN("Used %"PRIvtable" of %"PRIvtable" ingress tables",
-		      orig, ((vtable_id)SIMON_TABLE_PRODUCTION_START));
+	    VLOG_WARN_RL(&rl, "Used %"PRIvtable" of %"PRIvtable" ingress tables",
+			 orig, ((vtable_id)SIMON_TABLE_PRODUCTION_START));
 	}
 
 	break;
@@ -85,17 +87,17 @@ increment_table_counter(vtable_id counter_spec, vtable_id inc)
 	atomic_add(&atomic_table_id_egress, inc, &orig);
 
 	if(inc != 0) {
-	    VLOG_DBG("Incrementing egress table id from:  %"PRIvtable ", inc:  %"PRIvtable, orig, inc);
+	    VLOG_DBG_RL(&rl, "Incrementing egress table id from:  %"PRIvtable ", inc:  %"PRIvtable, orig, inc);
 	}
 
 	if((inc != 0) && (orig != 0) && ((orig % SIMON_TABLE_INC_WARN_INTERVAL) == 0)) {
-	    VLOG_WARN("Used %"PRIvtable" of %"PRIvtable" egress tables",
-		      orig, (vtable_id)(SIMON_TABLE_RESERVED_START - SIMON_TABLE_EGRESS_START));
+	    VLOG_WARN_RL(&rl, "Used %"PRIvtable" of %"PRIvtable" egress tables",
+			 orig, (vtable_id)(SIMON_TABLE_RESERVED_START - SIMON_TABLE_EGRESS_START));
 	}
 
 	break;
     default:
-	VLOG_WARN("Unknown counter spec");
+	VLOG_WARN_RL(&rl, "Unknown counter spec");
     }
 
     return orig;
