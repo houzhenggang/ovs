@@ -361,6 +361,11 @@ ofproto_dpif_cast(const struct ofproto *ofproto)
     return CONTAINER_OF(ofproto, struct ofproto_dpif, up);
 }
 
+struct virtable_map *ofproto_dpif_get_virtable(struct ofproto_dpif *ofproto)
+{
+    return &ofproto->up.virtable_ingress;
+}
+
 bool
 ofproto_dpif_get_enable_ufid(const struct dpif_backer *backer)
 {

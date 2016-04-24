@@ -231,4 +231,7 @@ static inline bool rule_dpif_is_internal(const struct rule_dpif *rule)
 #undef RULE_CAST
 
 bool ovs_native_tunneling_is_on(struct ofproto_dpif *ofproto);
+
+struct virtable_map *ofproto_dpif_get_virtable(struct ofproto_dpif *ofproto);
+
 #endif /* ofproto-dpif.h */

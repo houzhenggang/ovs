@@ -50,6 +50,8 @@
 #include "simap.h"
 #include "timeval.h"
 
+#include "virtable.h"
+
 struct match;
 struct ofputil_flow_mod;
 struct bfd_cfg;
@@ -102,6 +104,8 @@ struct ofproto {
 
     /* List of expirable flows, in all flow tables. */
     struct ovs_list expirable OVS_GUARDED_BY(ofproto_mutex);
+
+    struct virtable_map virtable_ingress;
 
     /* Meter table.
      * OpenFlow meters start at 1.  To avoid confusion we leave the first

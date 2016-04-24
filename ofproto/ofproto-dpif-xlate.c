@@ -60,6 +60,7 @@
 #include "tunnel.h"
 #include "openvswitch/vlog.h"
 
+#include "virtable.h"
 #include "increment_table_id.h"
 #include "learn_learn.h"
 
@@ -3334,6 +3335,8 @@ static void
 xlate_table_simon(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 		  bool may_packet_in, bool honor_table_miss)
 {
+    struct virtable_map *vtm = ofproto_dpif_get_virtable(ctx->xin->ofproto);
+
     static struct vlog_rate_limit rl OVS_UNUSED = VLOG_RATE_LIMIT_INIT(20, 20);
 
     /* Check if we need to recirculate before matching in a table. */
@@ -3351,10 +3354,12 @@ xlate_table_simon(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 	return;
     }
 
+
     if (xlate_resubmit_resource_check(ctx)) {
         uint8_t old_table_id = ctx->table_id;
         struct rule_dpif *rule;
 	vtable_id counter_val;
+	uint64_t rule_count;
 
         ctx->table_id = table_id;
 
@@ -3367,12 +3372,15 @@ xlate_table_simon(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 	    VLOG_WARN_RL(&rl, "Matching on table:  %"PRIu8", in_port:  %"PRIx16", counter:  %"PRIvtable", vid:  %"PRIu64,
 			 table_id, in_port, counter_val, ntohll(ctx->xin->flow.metadata));
 #endif
-	    rule = rule_dpif_lookup_from_table(ctx->xbridge->ofproto,
-					       ctx->tables_version,
-					       &ctx->xin->flow, ctx->xin->wc,
-					       ctx->xin->resubmit_stats,
-					       &ctx->table_id, in_port,
-					       false, false);
+	    rule_count = (ntohll(ctx->xin->flow.metadata == 0)) ? 1 : virtable_update(vtm, ntohll(ctx->xin->flow.metadata), 0);
+
+	    rule = (rule_count == 0) ? NULL :
+		rule_dpif_lookup_from_table(ctx->xbridge->ofproto,
+					    ctx->tables_version,
+					    &ctx->xin->flow, ctx->xin->wc,
+					    ctx->xin->resubmit_stats,
+					    &ctx->table_id, in_port,
+					    false, false);
 
 	    if (OVS_UNLIKELY(ctx->xin->resubmit_hook)) {
 		ctx->xin->resubmit_hook(ctx->xin, rule, ctx->recurse + 1);
@@ -4125,6 +4133,7 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
 				const struct ofpact_increment_table_id *incr_table_id) {
 
     uint8_t table_val;
+    struct virtable_map *vtm;
 
     ctx->xout->slow = SLOW_DUP;
 
@@ -4133,6 +4142,9 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
     }
 
     table_val = get_table_counter_by_spec(incr_table_id->counter_spec);
+
+    vtm = ofproto_dpif_get_virtable(ctx->xin->ofproto);
+    virtable_alloc(vtm, table_val + 1);
 
     /*
      * Indicate that this action requires per-packet processing so its result cannot
@@ -4145,14 +4157,6 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
     //ctx->xout->has_learn = true;
     //ctx->xout->slow = SLOW_ACTION;
     //xlate_commit_actions(ctx);
-
-
-#if 0 // TODO:  Add may_increment to xlate_ctx
-    /* Don't increment if we're not processing a packet. */
-    if(!ctx->xin->may_increment) {
-	return;
-    }
-#endif
 
     VLOG_DBG("Executing increment_table_id, table_id:  %"PRIu8", spec:  %s, val:  %2"PRIu8", nw_src:  0x%"PRIx32", recurse: %"PRIu32,
 	     ctx->table_id,
@@ -4174,6 +4178,7 @@ xlate_learn_learn_action(struct xlate_ctx *ctx,
     uint64_t ofpacts_stub[1024 / 8];
     struct ofputil_flow_mod fm;
     struct ofpbuf ofpacts;
+    struct virtable_map *vtm;
 
     learn_learn_mask(learn, ctx->wc);
     ctx->xout->slow = SLOW_DUP;
@@ -4191,6 +4196,12 @@ xlate_learn_learn_action(struct xlate_ctx *ctx,
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     learn_learn_execute(learn, &ctx->xin->flow, &fm, &ofpacts,
 			ctx->table_id);
+
+    if(learn->table_spec == TABLE_SPEC_INGRESS) {
+	vtm = ofproto_dpif_get_virtable(ctx->xin->ofproto);
+	virtable_update(vtm, get_table_counter_by_spec(TABLE_SPEC_INGRESS), 1);
+    }
+
     ofproto_dpif_flow_mod(ctx->xbridge->ofproto, &fm);
     ofpbuf_uninit(&ofpacts);
 #endif

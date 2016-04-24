@@ -629,6 +629,8 @@ ofproto_init_tables(struct ofproto *ofproto, int n_tables)
     OFPROTO_FOR_EACH_TABLE (table, ofproto) {
         oftable_init(table);
     }
+
+    virtable_map_init(&ofproto->virtable_ingress);
 }
 
 /* To be optionally called (only) by an ofproto implementation in its

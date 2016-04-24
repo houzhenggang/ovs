@@ -36,6 +36,7 @@ struct dpif_sflow;
 struct mac_learning;
 struct mcast_snooping;
 struct xlate_cache;
+struct ofproto_dpif;
 
 struct xlate_out {
     enum slow_path_reason slow; /* 0 if fast path may be used. */
