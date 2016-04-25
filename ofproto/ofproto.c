@@ -62,6 +62,9 @@
 #include "openvswitch/vlog.h"
 #include "bundles.h"
 
+#include "simon.h"
+#include "virtable.h"
+
 VLOG_DEFINE_THIS_MODULE(ofproto);
 
 COVERAGE_DEFINE(ofproto_flush);
@@ -2161,6 +2164,10 @@ ofproto_flow_mod(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
         if (done) {
             return 0;
         }
+
+	if(fm->table_id  == SIMON_TABLE_INGRESS) {
+	    virtable_update(&ofproto->virtable_ingress, ntohll(fm->match.flow.metadata), 1);
+	}
     }
 
     return handle_flow_mod__(ofproto, ofm, NULL);

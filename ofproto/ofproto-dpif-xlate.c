@@ -4143,8 +4143,10 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
 
     table_val = get_table_counter_by_spec(incr_table_id->counter_spec);
 
-    vtm = ofproto_dpif_get_virtable(ctx->xin->ofproto);
-    virtable_alloc(vtm, table_val + 1);
+    if(incr_table_id->counter_spec == TABLE_SPEC_INGRESS) {
+	vtm = ofproto_dpif_get_virtable(ctx->xin->ofproto);
+	virtable_alloc(vtm, table_val + 1);
+    }
 
     /*
      * Indicate that this action requires per-packet processing so its result cannot
@@ -4178,7 +4180,6 @@ xlate_learn_learn_action(struct xlate_ctx *ctx,
     uint64_t ofpacts_stub[1024 / 8];
     struct ofputil_flow_mod fm;
     struct ofpbuf ofpacts;
-    struct virtable_map *vtm;
 
     learn_learn_mask(learn, ctx->wc);
     ctx->xout->slow = SLOW_DUP;
@@ -4196,11 +4197,6 @@ xlate_learn_learn_action(struct xlate_ctx *ctx,
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     learn_learn_execute(learn, &ctx->xin->flow, &fm, &ofpacts,
 			ctx->table_id);
-
-    if(learn->table_spec == TABLE_SPEC_INGRESS) {
-	vtm = ofproto_dpif_get_virtable(ctx->xin->ofproto);
-	virtable_update(vtm, get_table_counter_by_spec(TABLE_SPEC_INGRESS), 1);
-    }
 
     ofproto_dpif_flow_mod(ctx->xbridge->ofproto, &fm);
     ofpbuf_uninit(&ofpacts);

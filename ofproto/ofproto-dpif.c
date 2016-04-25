@@ -1487,6 +1487,8 @@ destruct(struct ofproto *ofproto_)
 
     recirc_free_ofproto(ofproto, ofproto->up.name);
 
+    virtable_map_destroy(&ofproto->up.virtable_ingress);
+
     mbridge_unref(ofproto->mbridge);
 
     netflow_unref(ofproto->netflow);

@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+#include <config.h>
 #include "util.h"
 
 #include "virtable.h"
