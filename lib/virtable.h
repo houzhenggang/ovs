@@ -19,8 +19,9 @@
 
 #include <stdlib.h>
 
-#include "ovs-atomic.h"
 #include "hmap.h"
+#include "ovs-atomic.h"
+#include "openvswitch/thread.h"
 
 
 
@@ -37,7 +38,10 @@ struct virtable_map {
     struct virtable *tables;
 
     size_t n;
+    size_t capacity;
     struct virtable stub[VIRTABLE_STUB_SIZE];
+
+    struct ovs_mutex mutex;
 };
 
 void virtable_map_init(struct virtable_map *vtm);
