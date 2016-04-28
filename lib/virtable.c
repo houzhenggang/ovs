@@ -92,6 +92,7 @@ virtable_alloc_new_block(struct virtable_map *vtm, size_t capacity)
     ovs_assert(vtm->n < VIRTABLE_MAX_BLOCKS);
 
     virtable_block_init(blk, capacity, vt);
+    vtm->tail = blk;
 
     return blk;
 }
