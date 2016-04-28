@@ -23,7 +23,11 @@
 #include "ovs-atomic.h"
 #include "openvswitch/thread.h"
 
+//struct virtable_block;
+//struct virtable_map;
 
+#define VIRTABLE_STUB_SIZE (16)
+#define VIRTABLE_MAX_BLOCKS (64)
 
 struct virtable {
     struct hmap_node hmap_node;
@@ -31,18 +35,23 @@ struct virtable {
     atomic_ullong rule_count;
 };
 
-#define VIRTABLE_STUB_SIZE (16)
-
-struct virtable_map {
-    struct hmap hmap;
-    struct virtable *tables;
-
+struct virtable_block {
     size_t n;
     size_t capacity;
-    struct virtable stub[VIRTABLE_STUB_SIZE];
 
-    struct ovs_mutex mutex;
+    struct virtable *tables;
 };
+
+struct virtable_map {
+    struct hmap hmap;             /* Hash map for all table etries. */
+
+    size_t n;                     /* Count of currently allocated table blocks. */
+    struct virtable_block *tail;  /* Current virtable block for new entries. */
+
+    /* Pointers to all table blocks. */
+    struct virtable_block blocks[VIRTABLE_MAX_BLOCKS];
+};
+
 
 void virtable_map_init(struct virtable_map *vtm);
 void virtable_map_destroy(struct virtable_map *vtm);

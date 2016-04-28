@@ -17,70 +17,109 @@
 
 #include <config.h>
 #include "util.h"
+#include "openvswitch/vlog.h"
 
 #include "virtable.h"
 
+VLOG_DEFINE_THIS_MODULE(virtable);
+
+static struct virtable virtable_stub[VIRTABLE_STUB_SIZE];
+
+static inline void virtable_block_init(struct virtable_block *blk,
+				       size_t capacity, struct virtable *vt)
+{
+    blk->n = 0;
+    blk->capacity = capacity;
+    blk->tables = vt;
+}
+
+static inline void virtable_block_destroy(struct virtable_block *blk)
+{
+    blk->n = 0;
+    blk->capacity = 0;
+    free(blk->tables);
+}
+
+static inline void virtable_table_init(struct virtable * vt,
+				       uint64_t table_id, uint64_t count)
+
+{
+    vt->table_id = table_id;
+    atomic_init(&vt->rule_count, count);
+}
+
+
 void virtable_map_init(struct virtable_map *vtm)
 {
-    ovs_mutex_init(&vtm->mutex);
+    int i;
 
     hmap_init(&vtm->hmap);
 
-    vtm->n = 0;
-    vtm->tables = vtm->stub;
-    vtm->capacity = VIRTABLE_STUB_SIZE;
+    /* Initialize all blocks. */
+    for(i = 0; i < VIRTABLE_MAX_BLOCKS; i++)
+    {
+	virtable_block_init(&vtm->blocks[i], 0, NULL);
+    }
+
+    /* Add the stub block to avoid malloc() for initial set of virtables. */
+    vtm->blocks[0].tables = &virtable_stub[0];
+    vtm->blocks[0].capacity = ARRAY_SIZE(virtable_stub);
+
+    vtm->n = 1;
+    vtm->tail = &vtm->blocks[0];
 }
 
 
 void virtable_map_destroy(struct virtable_map *vtm)
 {
+    int i;
+
     hmap_destroy(&vtm->hmap);
+
+    /* Free all of the table blocks except the stub at index 0. */
+    for(i = 1; i < VIRTABLE_MAX_BLOCKS; i++)
+    {
+	virtable_block_destroy(&vtm->blocks[i]);
+    }
 }
 
-void virtable_alloc(struct virtable_map *vtm, uint64_t table_id)
+struct virtable_block *
+virtable_alloc_new_block(struct virtable_map *vtm, size_t capacity)
+{
+    struct virtable *vt = xmalloc(capacity * sizeof(struct virtable));
+    struct virtable_block *blk = &vtm->blocks[vtm->n++];
+
+    ovs_assert(vtm->n < VIRTABLE_MAX_BLOCKS);
+
+    virtable_block_init(blk, capacity, vt);
+
+    return blk;
+}
+
+/* Get a new table entry */
+void
+virtable_alloc(struct virtable_map *vtm, uint64_t table_id)
 {
     struct virtable *vt;
+    struct virtable_block *blk = vtm->tail;
 
-    //ovs_assert(vtm->n < VIRTABLE_STUB_SIZE);
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
 
-    if(vtm->n >= vtm->capacity) {
-	size_t i;
-	size_t old_size, new_size;
-	struct virtable *new_virtables, *old_virtables;
+    /* If our current block is out of space, allocate a new one. */
+    if(blk->n >= blk->capacity) {
 
-	old_virtables = vtm->tables;
+	VLOG_WARN_RL(&rl, "Allocating new virtable_block, table_id:  %"PRIu64 ", capacity:  %"PRIuSIZE,
+		     table_id, 2 * blk->capacity);
 
-	ovs_mutex_lock(&vtm->mutex);
-
-	old_size = vtm->capacity * sizeof(struct virtable);
-	new_size = (2 * vtm->capacity) * sizeof(struct virtable);
-
-	if(vtm->capacity == VIRTABLE_STUB_SIZE) {
-	    new_virtables = xmalloc(new_size);
-
-	    memcpy(new_virtables, vtm->stub, old_size);
-	} else {
-	    new_virtables = xrealloc(vtm->tables, new_size);
-	}
-
-	/* Update all of the hmap entries to point to our new memory. */
-	for(i = 0; i < vtm->n; i++)
-	{
-	    hmap_node_moved(&vtm->hmap,
-			    &old_virtables[i].hmap_node,
-			    &new_virtables[i].hmap_node);
-	}
-
-	vtm->tables = new_virtables;
-	vtm->capacity = 2 * vtm->capacity;
-
-	ovs_mutex_unlock(&vtm->mutex);
+	blk = virtable_alloc_new_block(vtm, 2 * blk->capacity);
     }
 
-    vt = &vtm->tables[vtm->n++];
+    /* By now we should have a table with some free space. */
+    ovs_assert(blk->n < blk->capacity);
 
-    vt->table_id = table_id;
-    atomic_init(&vt->rule_count, 0);
+    /* Finally, get a new table from the current block. */
+    vt = &blk->tables[blk->n++];
+    virtable_table_init(vt, table_id, 0);
 
     hmap_insert_at(&vtm->hmap, &vt->hmap_node, table_id,
 		   OVS_SOURCE_LOCATOR);
@@ -98,20 +137,7 @@ virtable_update(struct virtable_map *vtm,
 
     ovs_assert(vt != NULL);
 
-    /* If we are updating the virtable counter, we need to lock
-     * the data structure first in case it's being reallocated.
-     * If reallocation is happening while we're just reading, we
-     * should be safe, since we'll just be reading the old value. */
-    if(delta != 0) {
-	ovs_mutex_lock(&vtm->mutex);
-    }
-
     atomic_add(&vt->rule_count, delta, &orig);
-
-    if(delta != 0) {
-	ovs_mutex_unlock(&vtm->mutex);
-    }
-
 
     return orig;
 }
