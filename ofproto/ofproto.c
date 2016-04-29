@@ -63,6 +63,7 @@
 #include "bundles.h"
 
 #include "simon.h"
+#include "increment_table_id.h"
 #include "virtable.h"
 
 VLOG_DEFINE_THIS_MODULE(ofproto);
@@ -353,6 +354,8 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 /* The default value of true waits for flow restore. */
 static bool flow_restore_wait = true;
+
+static void ofproto_unixctl_simon_init(void);
 
 /* Must be called to initialize the ofproto library.
  *
@@ -7845,7 +7848,54 @@ ofproto_unixctl_init(void)
 
     unixctl_command_register("ofproto/list", "", 0, 0,
                              ofproto_unixctl_list, NULL);
+    ofproto_unixctl_simon_init();
 }
+
+static void
+ofproto_unixctl_vtm_set(struct unixctl_conn *conn, int argc, const char *argv[],
+			void *aux OVS_UNUSED)
+{
+    struct ofproto *ofproto;
+
+    vtable_id spec = TABLE_SPEC_BOTH;
+    vtable_id val = 0;
+    unsigned int i;
+
+    struct ds ds = DS_EMPTY_INITIALIZER;
+
+    if (argc > 1) {
+	spec = (vtable_id)atoi(argv[1]);
+    }
+
+    if (argc > 2) {
+	val = (vtable_id)atoi(argv[2]);
+    }
+
+    table_counter_set(spec, val);
+
+    HMAP_FOR_EACH (ofproto, hmap_node, &all_ofprotos) {
+	if (spec & TABLE_SPEC_INGRESS) {
+	    for (i = 0; i < val; i++) {
+		if (!virtable_exists(&ofproto->virtable_ingress, i)) {
+		    virtable_alloc(&ofproto->virtable_ingress, i);
+		}
+	    }
+	}
+    }
+
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
+}
+
+
+static void
+ofproto_unixctl_simon_init(void)
+{
+    unixctl_command_register("vtm/set", "[spec value]", 0, 2,
+			     ofproto_unixctl_vtm_set, NULL);
+}
+
+
 
 /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
  *

@@ -17,9 +17,11 @@
 
 #include <config.h>
 #include "util.h"
+#include "unixctl.h"
 #include "openvswitch/vlog.h"
 
 #include "virtable.h"
+
 
 VLOG_DEFINE_THIS_MODULE(virtable);
 

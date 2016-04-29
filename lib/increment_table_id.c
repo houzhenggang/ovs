@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#include <unistd.h>
 
 #include "increment_table_id.h"
 
@@ -27,10 +28,10 @@
 #include "ofp-errors.h"
 #include "ofp-util.h"
 #include "ofpbuf.h"
-#include "openflow/openflow.h"
 #include "ovs-atomic.h"
 #include "unaligned.h"
-#include <unistd.h>
+#include "unixctl.h"
+#include "openflow/openflow.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(increment_table_id);
@@ -46,6 +47,10 @@ static atomic_vtable_id atomic_table_id_egress  = ATOMIC_VAR_INIT(0);
 
 vtable_id increment_table_counter(vtable_id counter_spec, vtable_id inc);
 
+void table_counter_init(void)
+{
+}
+
 /* Checks that 'incr_table_id' is a valid action on 'flow'.  Returns 0 always. */
 enum ofperr
 increment_table_id_check(const struct ofpact_increment_table_id *incr_table_id)
@@ -60,6 +65,26 @@ increment_table_id_check(const struct ofpact_increment_table_id *incr_table_id)
 
     return 0;
 }
+
+vtable_id
+table_counter_set(vtable_id counter_spec, vtable_id val)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
+
+    VLOG_INFO_RL(&rl, "Setting atomic counter(s) with spec 0x%"PRIvtable" to value:  %"PRIvtable,
+		 counter_spec, val);
+
+    if(counter_spec & TABLE_SPEC_INGRESS) {
+	atomic_store(&atomic_table_id_ingress, val);
+    }
+
+    if(counter_spec & TABLE_SPEC_EGRESS) {
+	atomic_store(&atomic_table_id_egress, val);
+    }
+
+    return val;
+}
+
 
 vtable_id
 increment_table_counter(vtable_id counter_spec, vtable_id inc)

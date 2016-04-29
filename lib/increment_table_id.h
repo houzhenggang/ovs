@@ -16,8 +16,10 @@ struct ofputil_flow_mod;
 struct nx_action_increment_table_id;
 
 // Counters that may be incremented
-#define TABLE_SPEC_INGRESS (1)
-#define TABLE_SPEC_EGRESS  (2)
+#define TABLE_SPEC_INGRESS (0x01)
+#define TABLE_SPEC_EGRESS  (0x02)
+
+#define TABLE_SPEC_BOTH (TABLE_SPEC_INGRESS | TABLE_SPEC_EGRESS)
 
 /* Variable type for our table IDs, which must match the atomic type. */
 typedef uint64_t vtable_id;
@@ -41,5 +43,8 @@ void increment_table_id_format(const struct ofpact_increment_table_id *,
 vtable_id get_table_counter_by_id(vtable_id table_id);
 
 vtable_id get_table_counter_by_spec(vtable_id table_spec);
+
+void table_counter_init(void);
+vtable_id table_counter_set(vtable_id counter_spec, vtable_id val);
 
 #endif /* increment_table_id.h */
