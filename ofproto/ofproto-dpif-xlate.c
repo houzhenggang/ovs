@@ -3372,7 +3372,8 @@ xlate_table_simon(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 	    VLOG_WARN_RL(&rl, "Matching on table:  %"PRIu8", in_port:  %"PRIx16", counter:  %"PRIvtable", vid:  %"PRIu64,
 			 table_id, in_port, counter_val, ntohll(ctx->xin->flow.metadata));
 #endif
-	    rule_count = (ntohll(ctx->xin->flow.metadata == 0)) ? 1 : virtable_update(vtm, ntohll(ctx->xin->flow.metadata), 0);
+	    rule_count = (ntohll(ctx->xin->flow.metadata == 0)) ? 1 :
+		virtable_get(vtm, ntohll(ctx->xin->flow.metadata));
 
 	    rule = (rule_count == 0) ? NULL :
 		rule_dpif_lookup_from_table(ctx->xbridge->ofproto,

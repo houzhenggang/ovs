@@ -2166,7 +2166,8 @@ ofproto_flow_mod(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
         }
 
 	if(fm->table_id  == SIMON_TABLE_INGRESS) {
-	    virtable_update(&ofproto->virtable_ingress, ntohll(fm->match.flow.metadata), 1);
+	    virtable_increment(&ofproto->virtable_ingress,
+			       ntohll(fm->match.flow.metadata), 1);
 	}
     }
 
@@ -5314,6 +5315,12 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         goto exit_free_ofpacts;
     }
 
+    if(ofm.fm.table_id == SIMON_TABLE_INGRESS) {
+	virtable_increment(&ofproto->virtable_ingress,
+			   ntohll(ofm.fm.match.flow.metadata), 1);
+    }
+
+
     ofconn_report_flow_mod(ofconn, ofm.fm.command);
 
 exit_free_ofpacts:
@@ -5338,6 +5345,13 @@ handle_flow_mod__(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
     }
     ofmonitor_flush(ofproto->connmgr);
     ovs_mutex_unlock(&ofproto_mutex);
+
+#if 0
+    if(ofm->fm.table_id == SIMON_TABLE_INGRESS) {
+	virtable_increment(&ofproto->virtable_ingress,
+			   ntohll(ofm->fm.match.flow.metadata), 1);
+    }
+#endif
 
     run_rule_executes(ofproto);
     return error;

@@ -23,7 +23,13 @@
 
 VLOG_DEFINE_THIS_MODULE(virtable);
 
+uint64_t virtable_update(struct virtable_map *vtm,
+			 uint64_t virtable_id, uint64_t count, bool subtract);
+
+
 static struct virtable virtable_stub[VIRTABLE_STUB_SIZE];
+
+
 
 static inline void virtable_block_init(struct virtable_block *blk,
 				       size_t capacity, struct virtable *vt)
@@ -127,18 +133,72 @@ virtable_alloc(struct virtable_map *vtm, uint64_t table_id)
 }
 
 uint64_t
+virtable_get(struct virtable_map *vtm,
+	     uint64_t virtable_id)
+{
+    return virtable_update(vtm, virtable_id, 0, false);
+}
+
+
+uint64_t
+virtable_increment(struct virtable_map *vtm,
+	     uint64_t virtable_id, uint64_t count)
+{
+    return virtable_update(vtm, virtable_id, count, false);
+}
+
+uint64_t
+virtable_decrement(struct virtable_map *vtm,
+		   uint64_t virtable_id, uint64_t count)
+{
+    return virtable_update(vtm, virtable_id, count, true);
+}
+
+bool virtable_exists(struct virtable_map *vtm, uint64_t virtable_id)
+{
+    struct virtable *vt = NULL;
+
+    vt = CONTAINER_OF(hmap_first_with_hash(&vtm->hmap, virtable_id),
+		      struct virtable, hmap_node);
+
+    return (vt != NULL);
+}
+
+
+uint64_t
 virtable_update(struct virtable_map *vtm,
-		uint64_t table_id, uint64_t delta)
+		uint64_t table_id, uint64_t count, bool subtract)
 {
     struct virtable *vt = NULL;
     uint64_t orig = 0;
 
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
+
     vt = CONTAINER_OF(hmap_first_with_hash(&vtm->hmap, table_id),
 		      struct virtable, hmap_node);
 
+    /* If we don't have a virtable structure for this ID yet, create
+     * one now.  This should only happen when adding new flows to
+     * virtables manually (ie, at startup), not during normal packet
+     * processing. */
+    if(vt == NULL) {
+	VLOG_WARN_RL(&rl, "Allocating new virtable on-the-fly for virtable_id %"PRIu64, table_id);
+
+	virtable_alloc(vtm, table_id);
+
+	vt = CONTAINER_OF(hmap_first_with_hash(&vtm->hmap, table_id),
+			  struct virtable, hmap_node);
+    }
+
+    /* By now, we must have found a virtable for this ID */
     ovs_assert(vt != NULL);
 
-    atomic_add(&vt->rule_count, delta, &orig);
+    if(!subtract) {
+	atomic_add(&vt->rule_count, count, &orig);
+    } else {
+	atomic_sub(&vt->rule_count, count, &orig);
+    }
+
 
     return orig;
 }

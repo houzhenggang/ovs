@@ -115,6 +115,8 @@ static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes,
 static struct rule_dpif *rule_dpif_cast(const struct rule *);
 static void rule_expire(struct rule_dpif *);
 
+static void ofproto_virtable_expire_rule(struct rule_dpif *rule);
+
 struct group_dpif {
     struct ofgroup up;
 
@@ -3708,7 +3710,28 @@ rule_expire(struct rule_dpif *rule)
     if (reason >= 0) {
         COVERAGE_INC(ofproto_dpif_expired);
         ofproto_rule_expire(&rule->up, reason);
+
+	if(TABLE_IS_SIMON(rule->up.table_id)) {
+	    ofproto_virtable_expire_rule(rule);
+	}
     }
+}
+
+static void
+ofproto_virtable_expire_rule(struct rule_dpif *rule)
+{
+    uint8_t ovs_table_id = rule->up.table_id;
+    struct virtable_map *vtm = &rule->up.ofproto->virtable_ingress;
+    struct match match;
+
+    ovs_assert(TABLE_IS_INGRESS(ovs_table_id));
+
+    /* Expand the minimatch for this rule into the full version
+     * so we can pull out the metadata.
+     * TODO:  There must be a faster way to do this. */
+    minimatch_expand(&rule->up.cr.match, &match);
+
+    virtable_decrement(vtm, ntohll(match.flow.metadata), 1);
 }
 
 int

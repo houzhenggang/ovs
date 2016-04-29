@@ -15,23 +15,13 @@
 
 #define SIMON_TABLE_INC_WARN_INTERVAL (10000) // Warn on usage of every N tables
 
-// Convenience macros for identifying table ranges
-#if 0
-/* #define TABLE_IS_INGRESS(id) ((id >= SIMON_TABLE_INGRESS_START) && \ */
-/* 			      (id < SIMON_TABLE_PRODUCTION_START)) */
-#define TABLE_IS_INGRESS(id) ((id < SIMON_TABLE_PRODUCTION_START))
-
-#define TABLE_IS_PRODUCTION(id) ((id >= SIMON_TABLE_PRODUCTION_START) && \
-				 (id < SIMON_TABLE_EGRESS_START))
-
-#define TABLE_IS_EGRESS(id) ((id >= SIMON_TABLE_EGRESS_START) && \
-			     (id < 254))
-#endif
-
+// Convenience macros for identifying Simon tables
 
 #define TABLE_IS_INGRESS(id)    ((id == SIMON_TABLE_INGRESS))
 #define TABLE_IS_PRODUCTION(id) ((id == SIMON_TABLE_PRODUCTION))
 #define TABLE_IS_EGRESS(id)     ((id == SIMON_TABLE_EGRESS))
+
+#define TABLE_IS_SIMON(id)     (TABLE_IS_INGRESS(id) || (TABLE_IS_EGRESS(id)))
 
 #define SIMON_USE_OF_OUTPUT_EGRESS 1
 

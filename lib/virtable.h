@@ -58,7 +58,16 @@ void virtable_map_destroy(struct virtable_map *vtm);
 
 void virtable_alloc(struct virtable_map *vtm, uint64_t table_id);
 
-uint64_t virtable_update(struct virtable_map *vtm,
-			 uint64_t table_id, uint64_t delta);
+uint64_t virtable_increment(struct virtable_map *vtm,
+			    uint64_t virtable_id, uint64_t count);
+
+uint64_t virtable_decrement(struct virtable_map *vtm,
+			    uint64_t virtable_id, uint64_t count);
+
+
+uint64_t virtable_get(struct virtable_map *vtm,
+		      uint64_t virtable_id);
+
+bool virtable_exists(struct virtable_map *vtm, uint64_t virtable_id);
 
 #endif
