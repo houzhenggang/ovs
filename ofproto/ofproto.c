@@ -2172,6 +2172,8 @@ ofproto_flow_mod(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
 	if(fm->table_id  == SIMON_TABLE_INGRESS) {
 	    virtable_increment(&ofproto->virtable_ingress,
 			       ntohll(fm->match.flow.metadata), 1);
+	    ovs_assert(virtable_exists(&ofproto->virtable_ingress,
+				       ntohll(fm->match.flow.metadata)));
 	}
 #endif
     }

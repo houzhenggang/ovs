@@ -218,10 +218,13 @@ learn_learn_check(const struct ofpact_learn_learn * learn,
 void
 learn_learn_execute(const struct ofpact_learn_learn *learn,
 		    const struct flow *flow, struct ofputil_flow_mod *fm,
-		    struct ofpbuf *ofpacts, uint8_t rule_table)
+		    struct ofpbuf *ofpacts, uint8_t rule_table,
+		    struct vtable_ctx *vtable_ctx)
 {
     const struct ofpact_learn_spec *spec;
     const struct ofpact_learn_spec *end;
+
+    vtable_id vtable_id;
 
     spec = (const struct ofpact_learn_spec *) learn->data;
     end = &spec[learn->n_specs];
@@ -233,10 +236,8 @@ learn_learn_execute(const struct ofpact_learn_learn *learn,
     fm->new_cookie = htonll(learn->cookie);
 
     if (learn->table_spec == LEARN_USING_INGRESS_ATOMIC_TABLE) {
-	//fm->table_id = get_table_counter_by_spec(TABLE_SPEC_INGRESS);
 	fm->table_id = learn->table_id;
     } else if (learn->table_spec == LEARN_USING_EGRESS_ATOMIC_TABLE) {
-	//fm->table_id = SIMON_TABLE_EGRESS_START + get_table_counter_by_spec(TABLE_SPEC_EGRESS);
 	fm->table_id = learn->table_id;
     } else if (learn->table_spec == LEARN_USING_RULE_TABLE) {
 	fm->table_id = rule_table;
@@ -265,9 +266,13 @@ learn_learn_execute(const struct ofpact_learn_learn *learn,
 
     // Set the metadata field in the match based on the atomic ID
     if (learn->table_spec == LEARN_USING_INGRESS_ATOMIC_TABLE) {
-	match_set_metadata(&fm->match, htonll(get_table_counter_by_spec(TABLE_SPEC_INGRESS)));
+	vtable_id = (vtable_ctx->ingress_set) ? vtable_ctx->ingress_id :
+	                                        get_table_counter_by_spec(TABLE_SPEC_INGRESS);
+	match_set_metadata(&fm->match, htonll(vtable_id));
     } else if (learn->table_spec == LEARN_USING_EGRESS_ATOMIC_TABLE) {
-	match_set_metadata(&fm->match, htonll(get_table_counter_by_spec(TABLE_SPEC_EGRESS)));
+	vtable_id = (vtable_ctx->egress_set) ? vtable_ctx->egress_id :
+	                                        get_table_counter_by_spec(TABLE_SPEC_EGRESS);
+	match_set_metadata(&fm->match, htonll(vtable_id));
     }
 
     for (spec = (const struct ofpact_learn_spec *) learn->data; spec < end; spec++) {

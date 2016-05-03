@@ -20,11 +20,9 @@
 #include <stdlib.h>
 
 #include "cmap.h"
+#include "ovs-thread.h"
 #include "ovs-atomic.h"
 #include "openvswitch/thread.h"
-
-//struct virtable_block;
-//struct virtable_map;
 
 #define VIRTABLE_STUB_SIZE (16)
 #define VIRTABLE_MAX_BLOCKS (64)
@@ -42,10 +40,15 @@ struct virtable_block {
     struct virtable *tables;
 };
 
+BUILD_ASSERT_DECL(sizeof(size_t) == sizeof(atomic_ullong));
+
 struct virtable_map {
     struct cmap cmap;             /* Hash map for all table etries. */
 
+    struct ovs_mutex mutex;       /* Mutex to control block allocation. */
+
     size_t n;                     /* Count of currently allocated table blocks. */
+
     struct virtable_block *tail;  /* Current virtable block for new entries. */
 
     /* Pointers to all table blocks. */

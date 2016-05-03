@@ -30,6 +30,10 @@ uint64_t virtable_update(struct virtable_map *vtm,
 			 uint64_t virtable_id, uint64_t count, bool subtract);
 
 
+struct virtable_block *
+virtable_alloc_new_block(struct virtable_map *vtm, size_t capacity);
+
+
 static struct virtable virtable_stub[VIRTABLE_STUB_SIZE];
 
 
@@ -62,6 +66,7 @@ void virtable_map_init(struct virtable_map *vtm)
 {
     int i;
 
+    ovs_mutex_init(&vtm->mutex);
     cmap_init(&vtm->cmap);
 
     /* Initialize all blocks. */
@@ -76,6 +81,9 @@ void virtable_map_init(struct virtable_map *vtm)
 
     vtm->n = 1;
     vtm->tail = &vtm->blocks[0];
+
+    /* We must have a table 0, so allocate it now. */
+    virtable_alloc(vtm, 0);
 }
 
 
@@ -90,6 +98,8 @@ void virtable_map_destroy(struct virtable_map *vtm)
     {
 	virtable_block_destroy(&vtm->blocks[i]);
     }
+
+    ovs_mutex_destroy(&vtm->mutex);
 }
 
 struct virtable_block *
@@ -111,13 +121,16 @@ void
 virtable_alloc(struct virtable_map *vtm, uint64_t table_id)
 {
     struct virtable *vt;
-    struct virtable_block *blk = vtm->tail;
+    struct virtable_block *blk;
 
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
 
+    ovs_mutex_lock(&vtm->mutex);
+
+    blk= vtm->tail;
+
     /* If our current block is out of space, allocate a new one. */
     if(blk->n >= blk->capacity) {
-
 	VLOG_WARN_RL(&rl, "Allocating new virtable_block, table_id:  %"PRIu64 ", capacity:  %"PRIuSIZE,
 		     table_id, 2 * blk->capacity);
 
@@ -127,15 +140,26 @@ virtable_alloc(struct virtable_map *vtm, uint64_t table_id)
     /* By now we should have a table with some free space. */
     ovs_assert(blk->n < blk->capacity);
 
-    /* Finally, get a new table from the current block. */
-    vt = &blk->tables[blk->n++];
-    virtable_table_init(vt, table_id, 0);
+    /* Check to make sure this virtable hasn't already been allocated.
+     * This can happen if the flow_mod gets evaluated before this
+     * action, which apparently does happen. */
+    if(cmap_find(&vtm->cmap, table_id) == NULL) {
 
-    /* Hash field is only of type uint32_t, so we can only support
-     * hash values up to that size */
-    ovs_assert(table_id < UINT32_MAX);
+	/* Finally, get a new table from the current block. */
+	vt = &blk->tables[blk->n++];
+	virtable_table_init(vt, table_id, 0);
 
-    cmap_insert(&vtm->cmap, &vt->cmap_node, table_id);
+	/* Hash field is only of type uint32_t, so we can only support
+	 * hash values up to that size */
+	ovs_assert(table_id < UINT32_MAX);
+
+	cmap_insert(&vtm->cmap, &vt->cmap_node, table_id);
+    } else {
+	VLOG_WARN_RL(&rl, "Entry for virtable %"PRIu64 "already exists, not adding new virtable.",
+		     table_id);
+    }
+
+    ovs_mutex_unlock(&vtm->mutex);
 }
 
 uint64_t
@@ -178,7 +202,7 @@ virtable_update(struct virtable_map *vtm,
     struct virtable *vt = NULL;
     uint64_t orig = 0;
 
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 10);
 
     vt = CONTAINER_OF(cmap_find(&vtm->cmap, table_id),
 		      struct virtable, cmap_node);
@@ -187,22 +211,34 @@ virtable_update(struct virtable_map *vtm,
      * one now.  This should only happen when adding new flows to
      * virtables manually (ie, at startup), not during normal packet
      * processing. */
-    if(vt == NULL) {
+    if ((count != 0) && (vt == NULL)) {
+#if 0
 	VLOG_WARN_RL(&rl, "Allocating new virtable on-the-fly for virtable_id %"PRIu64, table_id);
-
+#endif
 	virtable_alloc(vtm, table_id);
 
 	vt = CONTAINER_OF(cmap_find(&vtm->cmap, table_id),
 			  struct virtable, cmap_node);
     }
 
-    /* By now, we must have found a virtable for this ID */
-    ovs_assert(vt != NULL);
+    if (count != 0) {
+	/* By now, we must have found a virtable for this ID */
+	ovs_assert(vt != NULL);
 
-    if(!subtract) {
-	atomic_add(&vt->rule_count, count, &orig);
+	if(!subtract) {
+	    atomic_add(&vt->rule_count, count, &orig);
+	} else {
+	    atomic_sub(&vt->rule_count, count, &orig);
+	}
     } else {
-	atomic_sub(&vt->rule_count, count, &orig);
+	if (vt != NULL) {
+	    atomic_read(&vt->rule_count, &orig);
+	} else {
+	    VLOG_WARN_RL(&rl, "No cmap entry found for virtable_id %"PRIu64", returning zero count",
+			 table_id);
+
+	    orig = 0;
+	}
     }
 
 

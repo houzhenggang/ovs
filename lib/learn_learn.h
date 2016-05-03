@@ -14,6 +14,8 @@ struct ofpact_learn_learn;
 struct ofputil_flow_mod;
 struct nx_action_learn_learn;
 
+struct vtable_ctx;
+
 /* NXAST_LEARN_LEARN helper functions.
  *
  * See include/openflow/nicira-ext.h for NXAST_LEARN_LEARN specification.
@@ -42,7 +44,8 @@ enum ofperr learn_learn_check(const struct ofpact_learn_learn * learn,
 			      enum ofputil_protocol *usable_protocols);
 
 void learn_learn_execute(const struct ofpact_learn_learn *learn, const struct flow *flow,
-                         struct ofputil_flow_mod *fm, struct ofpbuf *ofpacts, uint8_t rule_table);
+                         struct ofputil_flow_mod *fm, struct ofpbuf *ofpacts, uint8_t rule_table,
+			 struct vtable_ctx *vtable_ctx);
 
 void learn_learn_mask(const struct ofpact_learn_learn *learn,
 		      struct flow_wildcards *wc);

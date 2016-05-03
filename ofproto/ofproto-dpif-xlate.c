@@ -217,6 +217,11 @@ struct xlate_ctx {
     uint32_t shadow_regs[FLOW_N_REGS]; /* Saved simon registers during
 					* production translation. */
 
+    /* Simon virtual table identifiers allocated for this packet.
+     * Storing them here when the increment happens ensures another
+     * packet won't steal our value. */
+    struct vtable_ctx vtable_ctx;
+
    /* These are used for non-bond recirculation.  The recirculation IDs are
     * stored in xout and must be associated with a datapath flow (ukey),
     * otherwise they will be freed when the xout is uninitialized.
@@ -4137,8 +4142,10 @@ static void
 xlate_increment_table_id_action(struct xlate_ctx *ctx,
 				const struct ofpact_increment_table_id *incr_table_id) {
 
-    uint8_t table_val;
-    struct virtable_map *vtm;
+    vtable_id table_val;
+    struct virtable_map *vtm OVS_UNUSED;
+
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 20);
 
     ctx->xout->slow = SLOW_DUP;
 
@@ -4147,12 +4154,28 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
     }
 
     table_val = get_table_counter_by_spec(incr_table_id->counter_spec);
+    switch(incr_table_id->counter_spec){
+    case TABLE_SPEC_INGRESS:
+	ctx->vtable_ctx.ingress_set = true;
+	ctx->vtable_ctx.ingress_id = table_val;
+	break;
+    case TABLE_SPEC_EGRESS:
+	ctx->vtable_ctx.egress_set = true;
+	ctx->vtable_ctx.egress_id = table_val;
+	break;
+    default:
+	VLOG_WARN_RL(&rl, "Executing increment_table_id for unknown spec:  %"PRIu8,
+		     incr_table_id->counter_spec);
+    }
+
 
 #ifdef USE_VIRTABLE
+#if 0
     if(incr_table_id->counter_spec == TABLE_SPEC_INGRESS) {
 	vtm = ofproto_dpif_get_virtable(ctx->xin->ofproto);
 	virtable_alloc(vtm, table_val + 1);
     }
+#endif
 #endif
 
     /*
@@ -4167,7 +4190,7 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
     //ctx->xout->slow = SLOW_ACTION;
     //xlate_commit_actions(ctx);
 
-    VLOG_DBG("Executing increment_table_id, table_id:  %"PRIu8", spec:  %s, val:  %2"PRIu8", nw_src:  0x%"PRIx32", recurse: %"PRIu32,
+    VLOG_DBG("Executing increment_table_id, table_id:  %"PRIu8", spec:  %s, val:  %2"PRIvtable", nw_src:  0x%"PRIx32", recurse: %"PRIu32,
 	     ctx->table_id,
 	     (incr_table_id->counter_spec == TABLE_SPEC_INGRESS) ? "INGRESS" : "EGRESS",
 	     table_val,
@@ -4203,7 +4226,7 @@ xlate_learn_learn_action(struct xlate_ctx *ctx,
 #if 1
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     learn_learn_execute(learn, &ctx->xin->flow, &fm, &ofpacts,
-			ctx->table_id);
+			ctx->table_id, &ctx->vtable_ctx);
 
     ofproto_dpif_flow_mod(ctx->xbridge->ofproto, &fm);
     ofpbuf_uninit(&ofpacts);
@@ -5274,6 +5297,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .exit = false,
         .error = XLATE_OK,
         .mirrors = 0,
+
+	.vtable_ctx = VTABLE_CTX_INITIALIZER,
 
         .recirc_action_offset = -1,
         .last_unroll_offset = -1,

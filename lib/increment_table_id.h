@@ -28,6 +28,21 @@ typedef uint64_t vtable_id;
 #define PRIvtable PRIu64
 
 
+struct vtable_ctx {
+    bool ingress_set;
+    vtable_id ingress_id;
+
+    bool egress_set;
+    vtable_id egress_id;
+};
+
+#define VTABLE_CTX_INITIALIZER { \
+	.ingress_set = false,    \
+	.ingress_id = 0,         \
+	.egress_set = false,     \
+	.egress_id = 0,         \
+}
+
 /* NXAST_INCREMENT_TABLE_ID helper functions.
  *
  * See include/ofp-actions.h for NXAST_INCREMENT_TABLE_ID specification.
