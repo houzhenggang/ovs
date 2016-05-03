@@ -42,8 +42,8 @@ typedef atomic_ullong atomic_vtable_id;
 BUILD_ASSERT_DECL(sizeof(atomic_ullong) == sizeof(ovs_be64));
 BUILD_ASSERT_DECL(sizeof(vtable_id) == sizeof(atomic_vtable_id));
 
-static atomic_vtable_id atomic_table_id_ingress = ATOMIC_VAR_INIT(0);
-static atomic_vtable_id atomic_table_id_egress  = ATOMIC_VAR_INIT(0);
+static atomic_vtable_id atomic_table_id_ingress = ATOMIC_VAR_INIT(1);
+static atomic_vtable_id atomic_table_id_egress  = ATOMIC_VAR_INIT(1);
 
 vtable_id increment_table_counter(vtable_id counter_spec, vtable_id inc);
 

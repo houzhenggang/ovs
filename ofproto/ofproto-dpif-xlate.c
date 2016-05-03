@@ -3333,7 +3333,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 
 #define FOR_EACH_VTABLE(MD, MAX_MD)                             \
     for ((MD) = 0;                                              \
-	 (ntohll((MD)) <= (MAX_MD));				\
+	 ((ntohll(MD) == 0) || (ntohll((MD)) < (MAX_MD)));	\
 	 (MD) = htonll(ntohll((MD)) + 1))
 
 static void
