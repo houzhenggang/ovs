@@ -19,7 +19,7 @@
 
 #include <stdlib.h>
 
-#include "hmap.h"
+#include "cmap.h"
 #include "ovs-atomic.h"
 #include "openvswitch/thread.h"
 
@@ -30,7 +30,7 @@
 #define VIRTABLE_MAX_BLOCKS (64)
 
 struct virtable {
-    struct hmap_node hmap_node;
+    struct cmap_node cmap_node;
     uint64_t table_id;
     atomic_ullong rule_count;
 };
@@ -43,7 +43,7 @@ struct virtable_block {
 };
 
 struct virtable_map {
-    struct hmap hmap;             /* Hash map for all table etries. */
+    struct cmap cmap;             /* Hash map for all table etries. */
 
     size_t n;                     /* Count of currently allocated table blocks. */
     struct virtable_block *tail;  /* Current virtable block for new entries. */

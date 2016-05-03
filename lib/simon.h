@@ -35,6 +35,8 @@
 
 #define SIMON_OFP_IN_XID_MASK          (0xbe000000)
 
+#define USE_VIRTABLE 1
+
 // Register compare map
 
 /** INPUT REGISTERS **/

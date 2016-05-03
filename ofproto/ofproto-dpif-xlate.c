@@ -3372,8 +3372,12 @@ xlate_table_simon(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 	    VLOG_WARN_RL(&rl, "Matching on table:  %"PRIu8", in_port:  %"PRIx16", counter:  %"PRIvtable", vid:  %"PRIu64,
 			 table_id, in_port, counter_val, ntohll(ctx->xin->flow.metadata));
 #endif
+#ifdef USE_VIRTABLE
 	    rule_count = (ntohll(ctx->xin->flow.metadata == 0)) ? 1 :
 		virtable_get(vtm, ntohll(ctx->xin->flow.metadata));
+#else
+	    rule_count = 1;
+#endif
 
 	    rule = (rule_count == 0) ? NULL :
 		rule_dpif_lookup_from_table(ctx->xbridge->ofproto,
@@ -4144,10 +4148,12 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
 
     table_val = get_table_counter_by_spec(incr_table_id->counter_spec);
 
+#ifdef USE_VIRTABLE
     if(incr_table_id->counter_spec == TABLE_SPEC_INGRESS) {
 	vtm = ofproto_dpif_get_virtable(ctx->xin->ofproto);
 	virtable_alloc(vtm, table_val + 1);
     }
+#endif
 
     /*
      * Indicate that this action requires per-packet processing so its result cannot

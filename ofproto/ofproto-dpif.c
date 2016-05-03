@@ -3731,7 +3731,9 @@ ofproto_virtable_expire_rule(struct rule_dpif *rule)
      * TODO:  There must be a faster way to do this. */
     minimatch_expand(&rule->up.cr.match, &match);
 
+#ifdef USE_VIRTABLE
     virtable_decrement(vtm, ntohll(match.flow.metadata), 1);
+#endif
 }
 
 int

@@ -16,6 +16,7 @@
  */
 
 #include <config.h>
+#include <limits.h>
 #include "util.h"
 #include "unixctl.h"
 #include "openvswitch/vlog.h"
@@ -61,7 +62,7 @@ void virtable_map_init(struct virtable_map *vtm)
 {
     int i;
 
-    hmap_init(&vtm->hmap);
+    cmap_init(&vtm->cmap);
 
     /* Initialize all blocks. */
     for(i = 0; i < VIRTABLE_MAX_BLOCKS; i++)
@@ -82,7 +83,7 @@ void virtable_map_destroy(struct virtable_map *vtm)
 {
     int i;
 
-    hmap_destroy(&vtm->hmap);
+    cmap_destroy(&vtm->cmap);
 
     /* Free all of the table blocks except the stub at index 0. */
     for(i = 1; i < VIRTABLE_MAX_BLOCKS; i++)
@@ -130,8 +131,11 @@ virtable_alloc(struct virtable_map *vtm, uint64_t table_id)
     vt = &blk->tables[blk->n++];
     virtable_table_init(vt, table_id, 0);
 
-    hmap_insert_at(&vtm->hmap, &vt->hmap_node, table_id,
-		   OVS_SOURCE_LOCATOR);
+    /* Hash field is only of type uint32_t, so we can only support
+     * hash values up to that size */
+    ovs_assert(table_id < UINT32_MAX);
+
+    cmap_insert(&vtm->cmap, &vt->cmap_node, table_id);
 }
 
 uint64_t
@@ -160,8 +164,8 @@ bool virtable_exists(struct virtable_map *vtm, uint64_t virtable_id)
 {
     struct virtable *vt = NULL;
 
-    vt = CONTAINER_OF(hmap_first_with_hash(&vtm->hmap, virtable_id),
-		      struct virtable, hmap_node);
+    vt = CONTAINER_OF(cmap_find(&vtm->cmap, virtable_id),
+		      struct virtable, cmap_node);
 
     return (vt != NULL);
 }
@@ -176,8 +180,8 @@ virtable_update(struct virtable_map *vtm,
 
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
 
-    vt = CONTAINER_OF(hmap_first_with_hash(&vtm->hmap, table_id),
-		      struct virtable, hmap_node);
+    vt = CONTAINER_OF(cmap_find(&vtm->cmap, table_id),
+		      struct virtable, cmap_node);
 
     /* If we don't have a virtable structure for this ID yet, create
      * one now.  This should only happen when adding new flows to
@@ -188,8 +192,8 @@ virtable_update(struct virtable_map *vtm,
 
 	virtable_alloc(vtm, table_id);
 
-	vt = CONTAINER_OF(hmap_first_with_hash(&vtm->hmap, table_id),
-			  struct virtable, hmap_node);
+	vt = CONTAINER_OF(cmap_find(&vtm->cmap, table_id),
+			  struct virtable, cmap_node);
     }
 
     /* By now, we must have found a virtable for this ID */

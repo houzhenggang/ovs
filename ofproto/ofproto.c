@@ -2168,10 +2168,12 @@ ofproto_flow_mod(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
             return 0;
         }
 
+#ifdef USE_VIRTABLE
 	if(fm->table_id  == SIMON_TABLE_INGRESS) {
 	    virtable_increment(&ofproto->virtable_ingress,
 			       ntohll(fm->match.flow.metadata), 1);
 	}
+#endif
     }
 
     return handle_flow_mod__(ofproto, ofm, NULL);
@@ -5318,10 +5320,12 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         goto exit_free_ofpacts;
     }
 
+#ifdef USE_VIRTABLE
     if(ofm.fm.table_id == SIMON_TABLE_INGRESS) {
 	virtable_increment(&ofproto->virtable_ingress,
 			   ntohll(ofm.fm.match.flow.metadata), 1);
     }
+#endif
 
 
     ofconn_report_flow_mod(ofconn, ofm.fm.command);
