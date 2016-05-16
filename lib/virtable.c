@@ -188,21 +188,27 @@ bool virtable_next_id(struct virtable_map *vtm, uint64_t *val)
     bool found = false;
 
     if(cmap_count(&vtm->cmap_unallocated) != 0) {
-	struct virtable *vt = CONTAINER_OF(cmap_first(&vtm->cmap_unallocated),
-					   struct virtable, cmap_node);
-	uint64_t count;
+	struct cmap_node *node;
+	struct virtable *vt;
 
-	ovs_assert(vt != NULL);
-
-	atomic_read(&vt->rule_count, &count);
-	ovs_assert(count == 0);
-
- 	*val = vt->table_id;
-	found = true;
-
-	/* Move the entry into the allocated hash table. */
 	ovs_mutex_lock(&vtm->mutex);
-	virtable_swap_cmap(&vtm->cmap_unallocated, &vtm->cmap, vt);
+	node = cmap_first(&vtm->cmap_unallocated);
+
+	if(node != NULL) {
+	    uint64_t count;
+	    vt = CONTAINER_OF(node, struct virtable, cmap_node);
+
+	    ovs_assert(vt != NULL);
+
+	    atomic_read(&vt->rule_count, &count);
+	    ovs_assert(count == 0);
+
+	    *val = vt->table_id;
+	    found = true;
+
+	    /* Move the entry into the allocated hash table. */
+	    virtable_swap_cmap(&vtm->cmap_unallocated, &vtm->cmap, vt);
+	}
 	ovs_mutex_unlock(&vtm->mutex);
     }
 
