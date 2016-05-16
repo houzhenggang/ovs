@@ -266,12 +266,14 @@ learn_learn_execute(const struct ofpact_learn_learn *learn,
 
     // Set the metadata field in the match based on the atomic ID
     if (learn->table_spec == LEARN_USING_INGRESS_ATOMIC_TABLE) {
-	vtable_id = (vtable_ctx->ingress_set) ? vtable_ctx->ingress_id :
-	                                        get_table_counter_by_spec(TABLE_SPEC_INGRESS);
+	ovs_assert(vtable_ctx->ingress_set);
+	vtable_id = vtable_ctx->ingress_id;
+
 	match_set_metadata(&fm->match, htonll(vtable_id));
     } else if (learn->table_spec == LEARN_USING_EGRESS_ATOMIC_TABLE) {
-	vtable_id = (vtable_ctx->egress_set) ? vtable_ctx->egress_id :
-	                                        get_table_counter_by_spec(TABLE_SPEC_EGRESS);
+	ovs_assert(vtable_ctx->egress_set);
+	vtable_id = vtable_ctx->egress_id;
+
 	match_set_metadata(&fm->match, htonll(vtable_id));
     }
 

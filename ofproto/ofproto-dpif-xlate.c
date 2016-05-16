@@ -4147,13 +4147,27 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
 
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 20);
 
+    bool found_in_vtm = false;
+    uint64_t virtable_id;
+    BUILD_ASSERT_DECL(sizeof(vtable_id) == sizeof(uint64_t));
+
     ctx->xout->slow = SLOW_DUP;
 
     if(!ctx->xin->may_learn) {
 	return;
     }
 
-    table_val = get_table_counter_by_spec(incr_table_id->counter_spec);
+    vtm = ofproto_dpif_get_virtable(ctx->xin->ofproto);
+    found_in_vtm = virtable_next_id(vtm, &virtable_id);
+
+    table_val = (found_in_vtm) ? virtable_id :
+	get_table_counter_by_spec(incr_table_id->counter_spec);
+
+    /* If we are using a new virtable_id, allocate it. */
+    if(!found_in_vtm) {
+	virtable_alloc(vtm, table_val);
+    }
+
     switch(incr_table_id->counter_spec){
     case TABLE_SPEC_INGRESS:
 	ctx->vtable_ctx.ingress_set = true;
@@ -4167,16 +4181,6 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
 	VLOG_WARN_RL(&rl, "Executing increment_table_id for unknown spec:  %"PRIu8,
 		     incr_table_id->counter_spec);
     }
-
-
-#ifdef USE_VIRTABLE
-#if 0
-    if(incr_table_id->counter_spec == TABLE_SPEC_INGRESS) {
-	vtm = ofproto_dpif_get_virtable(ctx->xin->ofproto);
-	virtable_alloc(vtm, table_val + 1);
-    }
-#endif
-#endif
 
     /*
      * Indicate that this action requires per-packet processing so its result cannot
@@ -4198,7 +4202,9 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
 	     ctx->recurse);
 
     if(incr_table_id->counter_spec == TABLE_SPEC_INGRESS) {
-	increment_table_id_execute(incr_table_id);
+	if(!found_in_vtm) {
+	    increment_table_id_execute(incr_table_id);
+	}
     }
 }
 

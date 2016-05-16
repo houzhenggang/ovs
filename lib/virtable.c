@@ -23,11 +23,15 @@
 
 #include "virtable.h"
 
+#include "increment_table_id.h"
 
 VLOG_DEFINE_THIS_MODULE(virtable);
 
 uint64_t virtable_update(struct virtable_map *vtm,
 			 uint64_t virtable_id, uint64_t count, bool subtract);
+
+void virtable_swap_cmap(struct cmap *from, struct cmap *to,
+			struct virtable *vt);
 
 
 struct virtable_block *
@@ -68,6 +72,7 @@ void virtable_map_init(struct virtable_map *vtm)
 
     ovs_mutex_init(&vtm->mutex);
     cmap_init(&vtm->cmap);
+    cmap_init(&vtm->cmap_unallocated);
 
     /* Initialize all blocks. */
     for(i = 0; i < VIRTABLE_MAX_BLOCKS; i++)
@@ -92,6 +97,7 @@ void virtable_map_destroy(struct virtable_map *vtm)
     int i;
 
     cmap_destroy(&vtm->cmap);
+    cmap_destroy(&vtm->cmap_unallocated);
 
     /* Free all of the table blocks except the stub at index 0. */
     for(i = 1; i < VIRTABLE_MAX_BLOCKS; i++)
@@ -162,6 +168,47 @@ virtable_alloc(struct virtable_map *vtm, uint64_t table_id)
     ovs_mutex_unlock(&vtm->mutex);
 }
 
+/* Swap a virtable entry between two cmaps.
+ * NOTE:  Caller must already hold the mutex associated with both
+ * cmaps before invoking this function.
+ */
+void virtable_swap_cmap(struct cmap *from, struct cmap *to,
+			struct virtable *vt)
+{
+    ovs_assert(cmap_find(from, vt->table_id) != NULL);
+    ovs_assert(cmap_find(to,   vt->table_id) == NULL);
+
+    cmap_remove(from, &vt->cmap_node, vt->table_id);
+    cmap_insert(to,   &vt->cmap_node, vt->table_id);
+}
+
+
+bool virtable_next_id(struct virtable_map *vtm, uint64_t *val)
+{
+    bool found = false;
+
+    if(cmap_count(&vtm->cmap_unallocated) != 0) {
+	struct virtable *vt = CONTAINER_OF(cmap_first(&vtm->cmap_unallocated),
+					   struct virtable, cmap_node);
+	uint64_t count;
+
+	ovs_assert(vt != NULL);
+
+	atomic_read(&vt->rule_count, &count);
+	ovs_assert(count == 0);
+
+ 	*val = vt->table_id;
+	found = true;
+
+	/* Move the entry into the allocated hash table. */
+	ovs_mutex_lock(&vtm->mutex);
+	virtable_swap_cmap(&vtm->cmap_unallocated, &vtm->cmap, vt);
+	ovs_mutex_unlock(&vtm->mutex);
+    }
+
+    return found;
+}
+
 uint64_t
 virtable_get(struct virtable_map *vtm,
 	     uint64_t virtable_id)
@@ -181,7 +228,9 @@ uint64_t
 virtable_decrement(struct virtable_map *vtm,
 		   uint64_t virtable_id, uint64_t count)
 {
-    return virtable_update(vtm, virtable_id, count, true);
+    uint64_t orig = virtable_update(vtm, virtable_id, count, true);
+
+    return orig;
 }
 
 bool virtable_exists(struct virtable_map *vtm, uint64_t virtable_id)
@@ -202,7 +251,7 @@ virtable_update(struct virtable_map *vtm,
     struct virtable *vt = NULL;
     uint64_t orig = 0;
 
-    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(10, 10);
+    static struct vlog_rate_limit rl OVS_UNUSED = VLOG_RATE_LIMIT_INIT(10, 10);
 
     vt = CONTAINER_OF(cmap_find(&vtm->cmap, table_id),
 		      struct virtable, cmap_node);
@@ -212,7 +261,7 @@ virtable_update(struct virtable_map *vtm,
      * virtables manually (ie, at startup), not during normal packet
      * processing. */
     if ((count != 0) && (vt == NULL)) {
-#if 0
+#if 1
 	VLOG_WARN_RL(&rl, "Allocating new virtable on-the-fly for virtable_id %"PRIu64, table_id);
 #endif
 	virtable_alloc(vtm, table_id);
@@ -229,14 +278,28 @@ virtable_update(struct virtable_map *vtm,
 	    atomic_add(&vt->rule_count, count, &orig);
 	} else {
 	    atomic_sub(&vt->rule_count, count, &orig);
+
+	    /* Make sure our counter didn't wrap, which would inciate
+	     * something very bad happened.  */
+	    ovs_assert(orig - count < orig);
+
+	    /* If the count for this rule reached zero, move this
+	     * entry to the unallocated pool. */
+	    if(orig - count == 0) {
+		ovs_mutex_lock(&vtm->mutex);
+		virtable_swap_cmap(&vtm->cmap, &vtm->cmap_unallocated, vt);
+		ovs_mutex_unlock(&vtm->mutex);
+	    }
+
 	}
     } else {
 	if (vt != NULL) {
 	    atomic_read(&vt->rule_count, &orig);
 	} else {
+#if 0
 	    VLOG_WARN_RL(&rl, "No cmap entry found for virtable_id %"PRIu64", returning zero count",
 			 table_id);
-
+#endif
 	    orig = 0;
 	}
     }

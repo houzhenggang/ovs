@@ -44,6 +44,7 @@ BUILD_ASSERT_DECL(sizeof(size_t) == sizeof(atomic_ullong));
 
 struct virtable_map {
     struct cmap cmap;             /* Hash map for all table etries. */
+    struct cmap cmap_unallocated; /* Hash map for empty table entries */
 
     struct ovs_mutex mutex;       /* Mutex to control block allocation. */
 
@@ -61,6 +62,8 @@ void virtable_map_destroy(struct virtable_map *vtm);
 
 void virtable_alloc(struct virtable_map *vtm, uint64_t table_id);
 
+bool virtable_next_id(struct virtable_map *vtm, uint64_t *val);
+
 uint64_t virtable_increment(struct virtable_map *vtm,
 			    uint64_t virtable_id, uint64_t count);
 
@@ -68,6 +71,7 @@ uint64_t virtable_decrement(struct virtable_map *vtm,
 			    uint64_t virtable_id, uint64_t count);
 
 
+/* Get the table counter for a given virtable_id */
 uint64_t virtable_get(struct virtable_map *vtm,
 		      uint64_t virtable_id);
 
