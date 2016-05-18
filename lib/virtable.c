@@ -25,6 +25,8 @@
 
 #include "increment_table_id.h"
 
+#define VIRTABLE_RECLAIM_IDS 1
+
 VLOG_DEFINE_THIS_MODULE(virtable);
 
 uint64_t virtable_update(struct virtable_map *vtm,
@@ -285,6 +287,7 @@ virtable_update(struct virtable_map *vtm,
 	} else {
 	    atomic_sub(&vt->rule_count, count, &orig);
 
+#ifdef VIRTABLE_RECLAIM_IDS
 	    /* Make sure our counter didn't wrap, which would inciate
 	     * something very bad happened.  */
 	    ovs_assert(orig - count < orig);
@@ -296,6 +299,7 @@ virtable_update(struct virtable_map *vtm,
 		virtable_swap_cmap(&vtm->cmap, &vtm->cmap_unallocated, vt);
 		ovs_mutex_unlock(&vtm->mutex);
 	    }
+#endif
 
 	}
     } else {
