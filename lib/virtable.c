@@ -251,6 +251,10 @@ bool virtable_exists(struct virtable_map *vtm, uint64_t virtable_id)
     return (vt != NULL);
 }
 
+static inline struct virtable *virtable_find_cmap(struct cmap *cmap, uint64_t table_id)
+{
+    return CONTAINER_OF(cmap_find(cmap, table_id), struct virtable, cmap_node);
+}
 
 uint64_t
 virtable_update(struct virtable_map *vtm,
@@ -269,13 +273,23 @@ virtable_update(struct virtable_map *vtm,
      * virtables manually (ie, at startup), not during normal packet
      * processing. */
     if ((count != 0) && (vt == NULL)) {
-#if 1
-	VLOG_WARN_RL(&rl, "Allocating new virtable on-the-fly for virtable_id %"PRIu64, table_id);
-#endif
-	virtable_alloc(vtm, table_id);
+	/* If we haven't found a virtable yet, check for it first in the unallocated pool. */
+	struct virtable *vt_unalloc = virtable_find_cmap(&vtm->cmap_unallocated, table_id);
 
-	vt = CONTAINER_OF(cmap_find(&vtm->cmap, table_id),
-			  struct virtable, cmap_node);
+	if (vt_unalloc != NULL) {
+	    ovs_mutex_lock(&vtm->mutex);
+	    virtable_swap_cmap(&vtm->cmap_unallocated, &vtm->cmap, vt_unalloc);
+	    ovs_mutex_unlock(&vtm->mutex);
+
+	    VLOG_WARN_RL(&rl, "Reclaiming new virtable on-the-fly for virtable_id %"PRIu64, table_id);
+	    vt = vt_unalloc;
+	} else {
+	    VLOG_WARN_RL(&rl, "Allocating new virtable on-the-fly for virtable_id %"PRIu64, table_id);
+	    virtable_alloc(vtm, table_id);
+
+	    vt = CONTAINER_OF(cmap_find(&vtm->cmap, table_id),
+			      struct virtable, cmap_node);
+	}
     }
 
     if (count != 0) {
