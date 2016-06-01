@@ -7895,10 +7895,45 @@ ofproto_unixctl_vtm_set(struct unixctl_conn *conn, int argc, const char *argv[],
 
 
 static void
+ofproto_unixctl_vtm_get(struct unixctl_conn *conn, int argc, const char *argv[],
+			void *aux OVS_UNUSED)
+{
+    struct ofproto *ofproto OVS_UNUSED;
+
+    vtable_id spec = TABLE_SPEC_BOTH;
+
+    vtable_id max_table_id = 0;
+    size_t size_allocated = 0, size_unallocated = 0;
+
+    struct ds result = DS_EMPTY_INITIALIZER;
+
+    if (argc > 1) {
+	spec = (vtable_id)atoi(argv[1]);
+    }
+
+    max_table_id = get_table_counter_by_spec(spec);
+
+    HMAP_FOR_EACH (ofproto, hmap_node, &all_ofprotos) {
+	if (spec & TABLE_SPEC_INGRESS) {
+	    size_allocated = cmap_count(&ofproto->virtable_ingress.cmap);
+	    size_unallocated = cmap_count(&ofproto->virtable_ingress.cmap_unallocated);
+	}
+    }
+
+    ds_put_format(&result, "%"PRIvtable",%"PRIu64",%"PRIu64"\n",
+		  max_table_id, size_allocated, size_unallocated);
+    unixctl_command_reply(conn, ds_cstr(&result));
+    ds_destroy(&result);
+}
+
+
+static void
 ofproto_unixctl_simon_init(void)
 {
     unixctl_command_register("vtm/set", "[spec value]", 0, 2,
 			     ofproto_unixctl_vtm_set, NULL);
+    unixctl_command_register("vtm/stats", "[spec value]", 0, 1,
+			     ofproto_unixctl_vtm_get, NULL);
 }
 
 

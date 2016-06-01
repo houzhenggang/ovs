@@ -4161,7 +4161,8 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
     found_in_vtm = virtable_next_id(vtm, &virtable_id);
 
     table_val = (found_in_vtm) ? virtable_id :
-	get_table_counter_by_spec(incr_table_id->counter_spec);
+	increment_table_id_execute(incr_table_id);
+//	get_table_counter_by_spec(incr_table_id->counter_spec);
 
     /* If we are using a new virtable_id, allocate it. */
     if(!found_in_vtm) {
@@ -4200,12 +4201,13 @@ xlate_increment_table_id_action(struct xlate_ctx *ctx,
 	     table_val,
 	     ctx->xin->flow.nw_src,
 	     ctx->recurse);
-
+#if 0
     if(incr_table_id->counter_spec == TABLE_SPEC_INGRESS) {
 	if(!found_in_vtm) {
 	    increment_table_id_execute(incr_table_id);
 	}
     }
+#endif
 }
 
 static void

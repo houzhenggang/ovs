@@ -35,9 +35,11 @@ uint64_t virtable_update(struct virtable_map *vtm,
 void virtable_swap_cmap(struct cmap *from, struct cmap *to,
 			struct virtable *vt);
 
-
 struct virtable_block *
 virtable_alloc_new_block(struct virtable_map *vtm, size_t capacity);
+
+static inline struct virtable *virtable_find_cmap(struct cmap *cmap,
+						  uint64_t table_id);
 
 
 static struct virtable virtable_stub[VIRTABLE_STUB_SIZE];
@@ -66,6 +68,12 @@ static inline void virtable_table_init(struct virtable * vt,
     vt->table_id = table_id;
     atomic_init(&vt->rule_count, count);
 }
+
+static inline struct virtable *virtable_find_cmap(struct cmap *cmap, uint64_t table_id)
+{
+    return CONTAINER_OF(cmap_find(cmap, table_id), struct virtable, cmap_node);
+}
+
 
 
 void virtable_map_init(struct virtable_map *vtm)
@@ -129,6 +137,7 @@ void
 virtable_alloc(struct virtable_map *vtm, uint64_t table_id)
 {
     struct virtable *vt;
+    struct virtable *vt_unalloc;
     struct virtable_block *blk;
 
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
@@ -151,7 +160,8 @@ virtable_alloc(struct virtable_map *vtm, uint64_t table_id)
     /* Check to make sure this virtable hasn't already been allocated.
      * This can happen if the flow_mod gets evaluated before this
      * action, which apparently does happen. */
-    if(cmap_find(&vtm->cmap, table_id) == NULL) {
+    vt_unalloc = virtable_find_cmap(&vtm->cmap, table_id);
+    if(vt_unalloc == NULL) {
 
 	/* Finally, get a new table from the current block. */
 	vt = &blk->tables[blk->n++];
@@ -163,8 +173,10 @@ virtable_alloc(struct virtable_map *vtm, uint64_t table_id)
 
 	cmap_insert(&vtm->cmap, &vt->cmap_node, table_id);
     } else {
-	VLOG_WARN_RL(&rl, "Entry for virtable %"PRIu64 "already exists, not adding new virtable.",
-		     table_id);
+	uint64_t count;
+	atomic_read(&vt_unalloc->rule_count, &count);
+	VLOG_WARN_RL(&rl, "Entry for virtable %"PRIu64 " already exists with count %"PRIu64", not adding new virtable.",
+		     table_id, count);
     }
 
     ovs_mutex_unlock(&vtm->mutex);
@@ -249,11 +261,6 @@ bool virtable_exists(struct virtable_map *vtm, uint64_t virtable_id)
 		      struct virtable, cmap_node);
 
     return (vt != NULL);
-}
-
-static inline struct virtable *virtable_find_cmap(struct cmap *cmap, uint64_t table_id)
-{
-    return CONTAINER_OF(cmap_find(cmap, table_id), struct virtable, cmap_node);
 }
 
 uint64_t
